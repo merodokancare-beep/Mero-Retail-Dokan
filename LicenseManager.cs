@@ -42,11 +42,12 @@ namespace MeroDokan
             }
         }
 
-        // Helper to find the MAC address of the active network card
+        // Helper to find the MAC address of the active network card, or fallback to any physical card
         private static string GetActiveMacAddress()
         {
             try
             {
+                // First, try to find an active (Up) network card
                 foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
                 {
                     if (nic.OperationalStatus == OperationalStatus.Up && 
@@ -59,9 +60,80 @@ namespace MeroDokan
                         }
                     }
                 }
+
+                // If offline or no active network, find the first physical network card (even if Down)
+                foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (nic.NetworkInterfaceType != NetworkInterfaceType.Loopback && 
+                        nic.NetworkInterfaceType != NetworkInterfaceType.Tunnel)
+                    {
+                        string mac = nic.GetPhysicalAddress().ToString();
+                        if (!string.IsNullOrEmpty(mac))
+                        {
+                            return mac;
+                        }
+                    }
+                }
             }
             catch { }
             return "NOMACADDRESS";
+        }
+
+        // Helper to retrieve all physical MAC addresses on the system for candidate hardware ID checking
+        private static System.Collections.Generic.List<string> GetAllMacAddresses()
+        {
+            var macs = new System.Collections.Generic.List<string>();
+            try
+            {
+                foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                        continue;
+
+                    string mac = nic.GetPhysicalAddress().ToString();
+                    if (!string.IsNullOrEmpty(mac) && !macs.Contains(mac))
+                    {
+                        macs.Add(mac);
+                    }
+                }
+            }
+            catch { }
+
+            // Ensure NOMACADDRESS fallback is always present in candidate list
+            if (!macs.Contains("NOMACADDRESS"))
+            {
+                macs.Add("NOMACADDRESS");
+            }
+            return macs;
+        }
+
+        // Generates all candidate Hardware IDs for the current machine based on all available network cards
+        public static System.Collections.Generic.List<string> GetCandidateHardwareIds()
+        {
+            var ids = new System.Collections.Generic.List<string>();
+            string machineName = Environment.MachineName;
+            
+            foreach (string mac in GetAllMacAddresses())
+            {
+                string rawId = $"MeroDokan-{mac}-{machineName}";
+                using (SHA256 sha256 = SHA256.Create())
+                {
+                    byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(rawId));
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 0; i < bytes.Length; i++)
+                    {
+                        sb.Append(bytes[i].ToString("X2"));
+                    }
+
+                    string hash = sb.ToString();
+                    string hwid = $"MDKN-{hash.Substring(0, 4)}-{hash.Substring(4, 4)}-{hash.Substring(8, 4)}-{hash.Substring(12, 4)}";
+                    if (!ids.Contains(hwid))
+                    {
+                        ids.Add(hwid);
+                    }
+                }
+            }
+            return ids;
         }
 
         // Generates a Product Key for a specific Hardware ID and Expiry Date (For Developer Use)
@@ -138,24 +210,34 @@ namespace MeroDokan
                 }
             }
 
-            // Get current Hardware ID (cleaned)
-            string currentHardwareId = GetHardwareId().Replace("-", "").ToUpper();
+            // Verify signature against all candidate hardware IDs
+            var candidateIds = GetCandidateHardwareIds();
+            bool anyMatch = false;
 
-            // Calculate expected signature
-            string rawToSign = $"{currentHardwareId}|{expiryCode}|{SecretSalt}";
-            string expectedSig = "";
-            using (SHA256 sha256 = SHA256.Create())
+            foreach (string candidateId in candidateIds)
             {
-                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(rawToSign));
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < bytes.Length; i++)
+                string cleanHwid = candidateId.Replace("-", "").ToUpper();
+                string rawToSign = $"{cleanHwid}|{expiryCode}|{SecretSalt}";
+                string expectedSig = "";
+                using (SHA256 sha256 = SHA256.Create())
                 {
-                    sb.Append(bytes[i].ToString("X2"));
+                    byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(rawToSign));
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 0; i < bytes.Length; i++)
+                    {
+                        sb.Append(bytes[i].ToString("X2"));
+                    }
+                    expectedSig = sb.ToString().Substring(0, 12);
                 }
-                expectedSig = sb.ToString().Substring(0, 12);
+
+                if (sigPart == expectedSig)
+                {
+                    anyMatch = true;
+                    break;
+                }
             }
 
-            if (sigPart != expectedSig)
+            if (!anyMatch)
             {
                 message = "License key signature verification failed. The key is invalid or for another machine.";
                 return false;
@@ -172,10 +254,38 @@ namespace MeroDokan
             return true;
         }
 
+        // Helper to get the correct path to the license file, supporting AppData and legacy base directory
+        private static string GetLicensePath()
+        {
+            string appDataFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MeroDokan"
+            );
+            
+            string primaryPath = Path.Combine(appDataFolder, LicenseFileName);
+            string legacyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LicenseFileName);
+
+            // Copy legacy file to LocalApplicationData if it exists there but not in AppData yet
+            if (File.Exists(legacyPath) && !File.Exists(primaryPath))
+            {
+                try
+                {
+                    if (!Directory.Exists(appDataFolder))
+                    {
+                        Directory.CreateDirectory(appDataFolder);
+                    }
+                    File.Copy(legacyPath, primaryPath, true);
+                }
+                catch { }
+            }
+
+            return File.Exists(primaryPath) ? primaryPath : legacyPath;
+        }
+
         // Checks if a valid license is saved locally
         public static bool IsLicenseValid()
         {
-            string licensePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LicenseFileName);
+            string licensePath = GetLicensePath();
             if (!File.Exists(licensePath))
             {
                 return false;
@@ -195,18 +305,59 @@ namespace MeroDokan
         // Saves the valid license key
         public static void SaveLicenseKey(string productKey)
         {
-            string licensePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LicenseFileName);
-            File.WriteAllText(licensePath, productKey.Trim());
+            // Primary save: AppData folder
+            string appDataFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MeroDokan"
+            );
+            try
+            {
+                if (!Directory.Exists(appDataFolder))
+                {
+                    Directory.CreateDirectory(appDataFolder);
+                }
+                string appDataPath = Path.Combine(appDataFolder, LicenseFileName);
+                File.WriteAllText(appDataPath, productKey.Trim());
+            }
+            catch { }
+
+            // Secondary save: Base Directory (legacy, backup, ignore permission errors)
+            try
+            {
+                string legacyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LicenseFileName);
+                File.WriteAllText(legacyPath, productKey.Trim());
+            }
+            catch { }
         }
 
         // Clears the saved license (useful for reset or changing keys)
         public static void ClearLicense()
         {
-            string licensePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LicenseFileName);
-            if (File.Exists(licensePath))
+            // Clear AppData license
+            try
             {
-                File.Delete(licensePath);
+                string appDataFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "MeroDokan"
+                );
+                string appDataPath = Path.Combine(appDataFolder, LicenseFileName);
+                if (File.Exists(appDataPath))
+                {
+                    File.Delete(appDataPath);
+                }
             }
+            catch { }
+
+            // Clear legacy license
+            try
+            {
+                string legacyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LicenseFileName);
+                if (File.Exists(legacyPath))
+                {
+                    File.Delete(legacyPath);
+                }
+            }
+            catch { }
         }
     }
 }
