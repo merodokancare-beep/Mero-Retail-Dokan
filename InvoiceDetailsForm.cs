@@ -55,7 +55,12 @@ namespace MeroDokan
                     conn.Open();
                     string query = @"
                         SELECT p.Code as [Product Code], p.Name as [Product Name], 
-                               sd.Quantity as [Qty], sd.UnitPrice as [Unit Price], sd.Total as [Total Amount]
+                               sd.Quantity as [Qty], 
+                               ISNULL((SELECT SUM(srd.Quantity) 
+                                       FROM SalesReturnDetails srd 
+                                       INNER JOIN SalesReturns sr ON srd.ReturnId = sr.Id 
+                                       WHERE sr.SaleId = sd.SaleId AND srd.ProductId = sd.ProductId), 0) as [Returned Qty],
+                               sd.UnitPrice as [Unit Price], sd.Total as [Total Amount]
                         FROM SaleDetails sd
                         INNER JOIN Sales s ON sd.SaleId = s.Id
                         INNER JOIN Products p ON sd.ProductId = p.Id
@@ -74,10 +79,11 @@ namespace MeroDokan
                             if (gridItems.Columns["Total Amount"] != null) gridItems.Columns["Total Amount"].DefaultCellStyle.Format = "N2";
 
                             if (gridItems.Columns["Product Code"] != null) gridItems.Columns["Product Code"].FillWeight = 60;
-                            if (gridItems.Columns["Product Name"] != null) gridItems.Columns["Product Name"].FillWeight = 160;
-                            if (gridItems.Columns["Qty"] != null) gridItems.Columns["Qty"].FillWeight = 45;
-                            if (gridItems.Columns["Unit Price"] != null) gridItems.Columns["Unit Price"].FillWeight = 65;
-                            if (gridItems.Columns["Total Amount"] != null) gridItems.Columns["Total Amount"].FillWeight = 75;
+                            if (gridItems.Columns["Product Name"] != null) gridItems.Columns["Product Name"].FillWeight = 140;
+                            if (gridItems.Columns["Qty"] != null) gridItems.Columns["Qty"].FillWeight = 40;
+                            if (gridItems.Columns["Returned Qty"] != null) gridItems.Columns["Returned Qty"].FillWeight = 50;
+                            if (gridItems.Columns["Unit Price"] != null) gridItems.Columns["Unit Price"].FillWeight = 60;
+                            if (gridItems.Columns["Total Amount"] != null) gridItems.Columns["Total Amount"].FillWeight = 70;
                         }
                     }
 
@@ -85,7 +91,9 @@ namespace MeroDokan
                     string totalQuery = @"
                         SELECT GrandTotal, Discount, Tax, SubTotal, AmountPaid,
                                ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE SaleId = Sales.Id), 0) AS LaterPaid,
-                               (DueAmount - ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE SaleId = Sales.Id), 0)) AS CurrentDue
+                               (DueAmount - ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE SaleId = Sales.Id), 0)) AS CurrentDue,
+                               ISNULL((SELECT SUM(TotalRefund) FROM SalesReturns WHERE SaleId = Sales.Id), 0) AS TotalRefund,
+                               ISNULL((SELECT SUM(CashRefund) FROM SalesReturns WHERE SaleId = Sales.Id), 0) AS CashRefund
                         FROM Sales 
                         WHERE InvoiceNumber = @invNum";
 
@@ -103,9 +111,18 @@ namespace MeroDokan
                                 decimal initialPaid = Convert.ToDecimal(rdr["AmountPaid"]);
                                 decimal laterPaid = Convert.ToDecimal(rdr["LaterPaid"]);
                                 decimal currentDue = Convert.ToDecimal(rdr["CurrentDue"]);
+                                decimal totalRefund = Convert.ToDecimal(rdr["TotalRefund"]);
+                                decimal cashRefund = Convert.ToDecimal(rdr["CashRefund"]);
                                 decimal totalPaid = initialPaid + laterPaid;
 
-                                lblTotal.Text = $"SubTotal: Rs. {sub:N2}  •  Discount: Rs. {discount:N2}  •  Tax: Rs. {tax:N2}  •  Grand Total: Rs. {grand:N2}  •  Paid (Checkout): Rs. {initialPaid:N2}  •  Paid (Later): Rs. {laterPaid:N2}  •  Total Paid: Rs. {totalPaid:N2}  •  Due: Rs. {currentDue:N2}";
+                                if (totalRefund > 0)
+                                {
+                                    lblTotal.Text = $"SubTotal: Rs. {sub:N2}  •  Discount: Rs. {discount:N2}  •  Tax: Rs. {tax:N2}  •  Grand Total: Rs. {grand:N2}  •  Returned: Rs. {totalRefund:N2} (Cash Refund: Rs. {cashRefund:N2})  •  Net Grand: Rs. {grand - totalRefund:N2}  •  Paid (Checkout): Rs. {initialPaid:N2}  •  Paid (Later): Rs. {laterPaid:N2}  •  Refund Paid: -Rs. {cashRefund:N2}  •  Net Paid: Rs. {totalPaid - cashRefund:N2}  •  Due: Rs. {currentDue:N2}";
+                                }
+                                else
+                                {
+                                    lblTotal.Text = $"SubTotal: Rs. {sub:N2}  •  Discount: Rs. {discount:N2}  •  Tax: Rs. {tax:N2}  •  Grand Total: Rs. {grand:N2}  •  Paid (Checkout): Rs. {initialPaid:N2}  •  Paid (Later): Rs. {laterPaid:N2}  •  Total Paid: Rs. {totalPaid:N2}  •  Due: Rs. {currentDue:N2}";
+                                }
                             }
                         }
                     }

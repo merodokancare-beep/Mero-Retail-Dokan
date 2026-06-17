@@ -1548,6 +1548,7 @@ Date Filter Period: {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}
             string invNum = "", custName = "", custPhone = "", custAddr = "", dateStr = "", paymentMode = "";
             decimal sub = 0, disc = 0, tx = 0, grand = 0;
             decimal paidAmt = 0, dueAmt = 0;
+            decimal totalRefund = 0, cashRefund = 0;
 
             try
             {
@@ -1558,7 +1559,9 @@ Date Filter Period: {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}
                         SELECT s.InvoiceNumber, s.SaleDate, s.SubTotal, s.Discount, s.Tax, s.GrandTotal, s.PaymentMethod,
                                c.Name, c.Phone, c.Address,
                                (s.AmountPaid + ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE SaleId = s.Id), 0)) as AmountPaid,
-                               (s.DueAmount - ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE SaleId = s.Id), 0)) as DueAmount 
+                               (s.DueAmount - ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE SaleId = s.Id), 0)) as DueAmount,
+                               ISNULL((SELECT SUM(TotalRefund) FROM SalesReturns WHERE SaleId = s.Id), 0) as TotalRefund,
+                               ISNULL((SELECT SUM(CashRefund) FROM SalesReturns WHERE SaleId = s.Id), 0) as CashRefund
                         FROM Sales s
                         LEFT JOIN Customers c ON s.CustomerId = c.Id
                         WHERE s.Id = @id";
@@ -1582,6 +1585,8 @@ Date Filter Period: {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}
                                 custAddr = r.IsDBNull(9) ? "" : r.GetString(9);
                                 paidAmt = r.GetDecimal(10);
                                 dueAmt = r.GetDecimal(11);
+                                totalRefund = r.GetDecimal(12);
+                                cashRefund = r.GetDecimal(13);
                             }
                         }
                     }
@@ -1692,7 +1697,11 @@ Date Filter Period: {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}
                     {
                         conn.Open();
                         string detailsQuery = @"
-                            SELECT p.Name, sd.Quantity, sd.UnitPrice, sd.Total 
+                            SELECT p.Name, sd.Quantity, sd.UnitPrice, sd.Total,
+                                   ISNULL((SELECT SUM(srd.Quantity) 
+                                           FROM SalesReturnDetails srd 
+                                           INNER JOIN SalesReturns sr ON srd.ReturnId = sr.Id 
+                                           WHERE sr.SaleId = sd.SaleId AND srd.ProductId = sd.ProductId), 0) as ReturnedQty
                             FROM SaleDetails sd
                             INNER JOIN Products p ON sd.ProductId = p.Id
                             WHERE sd.SaleId = @id";
@@ -1708,9 +1717,12 @@ Date Filter Period: {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}
                                     int qty = r.GetInt32(1);
                                     decimal rate = r.GetDecimal(2);
                                     decimal total = r.GetDecimal(3);
+                                    int returnedQty = r.GetInt32(4);
+
+                                    string qtyStr = returnedQty > 0 ? $"{qty} (-{returnedQty})" : qty.ToString();
 
                                     g.DrawString(pName, fRegular, bDark, col1, rowY);
-                                    g.DrawString(qty.ToString(), fRegular, bDark, col3, rowY);
+                                    g.DrawString(qtyStr, fRegular, bDark, col3, rowY);
                                     g.DrawString($"Rs. {rate:F2}", fRegular, bDark, col4, rowY);
                                     g.DrawString($"Rs. {total:F2}", fRegular, bDark, col5, rowY);
 
@@ -1744,16 +1756,42 @@ Date Filter Period: {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}
 
                 g.DrawString("GRAND TOTAL:", fBold, bDark, summaryX, rowY);
                 g.DrawString($"Rs. {grand:N2}", fBold, bDark, col5, rowY);
-                rowY += 25;
+                rowY += 20;
+
+                if (totalRefund > 0)
+                {
+                    g.DrawString("Returned Amount:", fRegular, bDark, summaryX, rowY);
+                    g.DrawString($"- Rs. {totalRefund:N2}", fRegular, bDark, col5, rowY);
+                    rowY += 20;
+
+                    g.DrawString("NET GRAND TOTAL:", fBold, bDark, summaryX, rowY);
+                    g.DrawString($"Rs. {grand - totalRefund:N2}", fBold, bDark, col5, rowY);
+                    rowY += 25;
+                }
+                else
+                {
+                    rowY += 5;
+                }
 
                 g.DrawString("Amount Paid:", fRegular, bDark, summaryX, rowY);
                 g.DrawString($"Rs. {paidAmt:N2}", fRegular, bDark, col5, rowY);
-                rowY += 18;
+                rowY += 20;
+
+                if (cashRefund > 0)
+                {
+                    g.DrawString("Cash Refunded:", fRegular, bDark, summaryX, rowY);
+                    g.DrawString($"- Rs. {cashRefund:N2}", fRegular, bDark, col5, rowY);
+                    rowY += 20;
+
+                    g.DrawString("Net Paid Amount:", fRegular, bDark, summaryX, rowY);
+                    g.DrawString($"Rs. {paidAmt - cashRefund:N2}", fRegular, bDark, col5, rowY);
+                    rowY += 20;
+                }
 
                 g.DrawString("Balance Due:", fBold, bDark, summaryX, rowY);
                 g.DrawString($"Rs. {dueAmt:N2}", fBold, bDark, col5, rowY);
 
-                g.DrawString($"Payment Mode: {paymentMode}", fBold, bDark, startX, rowY - 18);
+                g.DrawString($"Payment Mode: {paymentMode}", fBold, bDark, startX, rowY);
                 rowY += 25;
 
                 // Fetch and draw repayment history if there is any
@@ -1763,10 +1801,14 @@ Date Filter Period: {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}
                     {
                         conn.Open();
                         string pQuery = @"
-                            SELECT PaymentDate, Amount, PaymentMethod, Remarks 
+                            SELECT PaymentDate AS DateVal, Amount, PaymentMethod AS Method, Remarks 
                             FROM CustomerPayments 
                             WHERE SaleId = @saleId 
-                            ORDER BY PaymentDate ASC";
+                            UNION ALL
+                            SELECT ReturnDate AS DateVal, (TotalRefund - CashRefund) AS Amount, 'Return Offset' AS Method, 'Returned items offset' AS Remarks
+                            FROM SalesReturns
+                            WHERE SaleId = @saleId AND (TotalRefund - CashRefund) > 0
+                            ORDER BY DateVal ASC";
                         using (SqlCommand cmd = new SqlCommand(pQuery, conn))
                         {
                             cmd.Parameters.AddWithValue("@saleId", printSaleId);
@@ -1789,7 +1831,9 @@ Date Filter Period: {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}
                                     string pMethod = rdr.GetString(2);
                                     string pRemarks = rdr.IsDBNull(3) ? "" : rdr.GetString(3);
 
-                                    string logLine = $"• {pDate:yyyy-MM-dd HH:mm} - Paid Rs. {pAmount:N2} via {pMethod} ({pRemarks})";
+                                    string logLine = pMethod == "Return Offset"
+                                        ? $"• {pDate:yyyy-MM-dd HH:mm} - Return Offset Rs. {pAmount:N2} ({pRemarks})"
+                                        : $"• {pDate:yyyy-MM-dd HH:mm} - Paid Rs. {pAmount:N2} via {pMethod} ({pRemarks})";
                                     g.DrawString(logLine, fRegular, bDark, startX + 15, rowY);
                                     rowY += 18;
                                 }

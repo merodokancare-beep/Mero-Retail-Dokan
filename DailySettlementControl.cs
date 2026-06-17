@@ -329,22 +329,12 @@ namespace MeroDokan
 
                     // 3. Previous Due Repayments (Cash)
                     string prevDuesSql = @"
-                        WITH PreExistingDues AS (
-                            SELECT c.Id as CustomerId,
-                                   (ISNULL((SELECT SUM(s.DueAmount) FROM Sales s WHERE s.CustomerId = c.Id AND s.SaleDate < @todayStart), 0) -
-                                    ISNULL((SELECT SUM(p.Amount) FROM CustomerPayments p WHERE p.CustomerId = c.Id AND p.PaymentDate < @todayStart), 0)) as OldDue
-                            FROM Customers c
-                        )
-                        SELECT ISNULL(SUM(
-                            CASE 
-                                WHEN ped.OldDue > 0 THEN 
-                                    CASE WHEN cp.Amount > ped.OldDue THEN ped.OldDue ELSE cp.Amount END
-                                ELSE 0 
-                             END
-                        ), 0)
+                        SELECT ISNULL(SUM(cp.Amount), 0)
                         FROM CustomerPayments cp
-                        INNER JOIN PreExistingDues ped ON cp.CustomerId = ped.CustomerId
-                        WHERE cp.PaymentDate >= @todayStart AND cp.PaymentDate < @todayEnd AND cp.PaymentMethod = 'Cash'";
+                        LEFT JOIN Sales s ON cp.SaleId = s.Id
+                        WHERE cp.PaymentDate >= @todayStart AND cp.PaymentDate < @todayEnd 
+                          AND cp.PaymentMethod = 'Cash'
+                          AND (s.SaleDate < @todayStart OR cp.SaleId IS NULL)";
 
                     using (SqlCommand cmd = new SqlCommand(prevDuesSql, conn))
                     {
@@ -394,7 +384,7 @@ namespace MeroDokan
 
         private void UpdateCalculations()
         {
-            expectedCash = totalSaleToday - dueTodayUnpaid;
+            expectedCash = cashSales + prevDueRepayments + todayDueRepayments - cashRefunds;
             lblExpectedCash.Text = $"Rs. {expectedCash:N2}";
 
             decimal actualCash = 0;

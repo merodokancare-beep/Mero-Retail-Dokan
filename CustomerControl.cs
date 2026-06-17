@@ -60,6 +60,8 @@ namespace MeroDokan
             gridCustomers.Location = new Point(20, 125);
             gridCustomers.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
             Theme.StyleGrid(gridCustomers);
+            gridCustomers.CellDoubleClick += GridCustomers_CellDoubleClick;
+            gridCustomers.CellContentClick += GridCustomers_CellContentClick;
             this.Controls.Add(gridCustomers);
 
             // Action Buttons Panel
@@ -143,6 +145,23 @@ namespace MeroDokan
                 if (gridCustomers.Columns["Due Balance"] != null)
                 {
                     gridCustomers.Columns["Due Balance"].DefaultCellStyle.Format = "N2";
+                }
+
+                // Add "View Details" button column if not already present
+                if (gridCustomers.Columns["ViewDetails"] == null)
+                {
+                    DataGridViewButtonColumn btnCol = new DataGridViewButtonColumn();
+                    btnCol.Name = "ViewDetails";
+                    btnCol.HeaderText = "Sold Items";
+                    btnCol.Text = "🔍 View Items";
+                    btnCol.UseColumnTextForButtonValue = true;
+                    btnCol.FlatStyle = FlatStyle.Flat;
+                    btnCol.DefaultCellStyle.BackColor = Theme.Success;
+                    btnCol.DefaultCellStyle.ForeColor = Color.White;
+                    btnCol.DefaultCellStyle.SelectionBackColor = Theme.Success;
+                    btnCol.DefaultCellStyle.SelectionForeColor = Color.White;
+                    btnCol.FillWeight = 80;
+                    gridCustomers.Columns.Add(btnCol);
                 }
             }
             catch (Exception ex)
@@ -268,6 +287,245 @@ namespace MeroDokan
                 if (dlg.ShowDialog() == DialogResult.OK)
                 {
                     LoadCustomers();
+                }
+            }
+        }
+
+        private void GridCustomers_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0)
+            {
+                DataGridViewRow row = gridCustomers.Rows[e.RowIndex];
+                int customerId = Convert.ToInt32(row.Cells["Id"].Value);
+                string customerName = row.Cells["Name"].Value.ToString();
+                decimal dueBalance = 0;
+                if (row.Cells["Due Balance"].Value != null && row.Cells["Due Balance"].Value != DBNull.Value)
+                {
+                    dueBalance = Convert.ToDecimal(row.Cells["Due Balance"].Value);
+                }
+
+                ShowCustomerItems(customerId, customerName, dueBalance);
+            }
+        }
+
+        private void GridCustomers_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0 && gridCustomers.Columns[e.ColumnIndex].Name == "ViewDetails")
+            {
+                DataGridViewRow row = gridCustomers.Rows[e.RowIndex];
+                int customerId = Convert.ToInt32(row.Cells["Id"].Value);
+                string customerName = row.Cells["Name"].Value.ToString();
+                decimal dueBalance = 0;
+                if (row.Cells["Due Balance"].Value != null && row.Cells["Due Balance"].Value != DBNull.Value)
+                {
+                    dueBalance = Convert.ToDecimal(row.Cells["Due Balance"].Value);
+                }
+
+                ShowCustomerItems(customerId, customerName, dueBalance);
+            }
+        }
+
+        private void ShowCustomerItems(int customerId, string customerName, decimal dueBalance)
+        {
+            using (CustomerPurchasedItemsDialog dlg = new CustomerPurchasedItemsDialog(customerId, customerName, dueBalance))
+            {
+                dlg.ShowDialog();
+            }
+        }
+
+        // Nested Dialog to view sold products & payment breakup for a customer
+        private class CustomerPurchasedItemsDialog : Form
+        {
+            private int customerId;
+            private string customerName;
+            private decimal dueBalance;
+
+            private DataGridView gridInvoices;
+            private DataGridView gridItems;
+            private Button btnClose;
+
+            public CustomerPurchasedItemsDialog(int customerId, string customerName, decimal dueBalance)
+            {
+                this.customerId = customerId;
+                this.customerName = customerName;
+                this.dueBalance = dueBalance;
+                InitializeComponent();
+                LoadItems();
+            }
+
+            private void InitializeComponent()
+            {
+                this.Text = $"Sold Items breakup - {customerName}";
+                this.ClientSize = new Size(950, 520);
+                this.AutoScaleMode = AutoScaleMode.Dpi;
+                this.FormBorderStyle = FormBorderStyle.FixedDialog;
+                this.MaximizeBox = false;
+                this.MinimizeBox = false;
+                this.StartPosition = FormStartPosition.CenterParent;
+                this.BackColor = Theme.Primary;
+                this.Font = Theme.MainFont;
+                this.ForeColor = Theme.TextLight;
+
+                Label lblHeader = new Label();
+                lblHeader.Text = dueBalance > 0 
+                    ? $"Outstanding Unpaid Invoices for {customerName} (Net Dues: Rs. {dueBalance:N2})"
+                    : $"Sales History for {customerName}";
+                lblHeader.Location = new Point(20, 15);
+                lblHeader.AutoSize = true;
+                Theme.StyleLabel(lblHeader, Theme.TextLight, Theme.HeaderFont);
+                this.Controls.Add(lblHeader);
+
+                // Invoices Grid
+                gridInvoices = new DataGridView();
+                gridInvoices.Location = new Point(20, 50);
+                gridInvoices.Size = new Size(910, 170);
+                Theme.StyleGrid(gridInvoices);
+                gridInvoices.SelectionChanged += GridInvoices_SelectionChanged;
+                this.Controls.Add(gridInvoices);
+
+                Label lblDetailHeader = new Label();
+                lblDetailHeader.Text = "Items in Selected Invoice";
+                lblDetailHeader.Location = new Point(20, 235);
+                lblDetailHeader.AutoSize = true;
+                Theme.StyleLabel(lblDetailHeader, Theme.TextLight, Theme.BoldFont);
+                this.Controls.Add(lblDetailHeader);
+
+                // Items Grid
+                gridItems = new DataGridView();
+                gridItems.Location = new Point(20, 260);
+                gridItems.Size = new Size(910, 190);
+                Theme.StyleGrid(gridItems);
+                this.Controls.Add(gridItems);
+
+                btnClose = new Button();
+                btnClose.Text = "Close";
+                btnClose.Size = new Size(130, 40);
+                btnClose.Location = new Point(800, 465);
+                Theme.StyleSecondaryButton(btnClose);
+                btnClose.Click += (s, e) => this.Close();
+                this.Controls.Add(btnClose);
+
+                this.CancelButton = btnClose;
+            }
+
+            private void GridInvoices_SelectionChanged(object sender, EventArgs e)
+            {
+                if (gridInvoices.CurrentRow != null)
+                {
+                    object val = gridInvoices.CurrentRow.Cells["Id"].Value;
+                    if (val != null && val != DBNull.Value)
+                    {
+                        int saleId = Convert.ToInt32(val);
+                        LoadInvoiceItems(saleId);
+                        return;
+                    }
+                }
+                gridItems.DataSource = null;
+            }
+
+            private void LoadItems()
+            {
+                try
+                {
+                    using (SqlConnection conn = new SqlConnection(DatabaseHelper.ConnectionString))
+                    {
+                        conn.Open();
+                        string query;
+
+                        if (dueBalance > 0)
+                        {
+                            query = @"
+                                SELECT s.Id, s.InvoiceNumber as [Invoice No], 
+                                       s.SaleDate as [Date],
+                                       s.GrandTotal as [Grand Total],
+                                       (s.DueAmount - ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE SaleId = s.Id), 0)) as [Invoice Due]
+                                FROM Sales s
+                                WHERE s.CustomerId = @custId
+                                  AND (s.DueAmount - ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE SaleId = s.Id), 0)) > 0
+                                ORDER BY s.SaleDate DESC";
+                        }
+                        else
+                        {
+                            query = @"
+                                SELECT s.Id, s.InvoiceNumber as [Invoice No], 
+                                       s.SaleDate as [Date],
+                                       s.GrandTotal as [Grand Total],
+                                       0.00 as [Invoice Due]
+                                FROM Sales s
+                                WHERE s.CustomerId = @custId
+                                ORDER BY s.SaleDate DESC";
+                        }
+
+                        using (SqlCommand cmd = new SqlCommand(query, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@custId", customerId);
+                            using (SqlDataAdapter da = new SqlDataAdapter(cmd))
+                            {
+                                DataTable dt = new DataTable();
+                                da.Fill(dt);
+                                gridInvoices.DataSource = dt;
+
+                                // Hide ID
+                                if (gridInvoices.Columns["Id"] != null) gridInvoices.Columns["Id"].Visible = false;
+
+                                // Column formats
+                                if (gridInvoices.Columns["Date"] != null) gridInvoices.Columns["Date"].DefaultCellStyle.Format = "yyyy-MM-dd HH:mm";
+                                if (gridInvoices.Columns["Grand Total"] != null) gridInvoices.Columns["Grand Total"].DefaultCellStyle.Format = "N2";
+                                if (gridInvoices.Columns["Invoice Due"] != null) gridInvoices.Columns["Invoice Due"].DefaultCellStyle.Format = "N2";
+
+                                // Fill weights
+                                if (gridInvoices.Columns["Invoice No"] != null) gridInvoices.Columns["Invoice No"].FillWeight = 100;
+                                if (gridInvoices.Columns["Date"] != null) gridInvoices.Columns["Date"].FillWeight = 120;
+                                if (gridInvoices.Columns["Grand Total"] != null) gridInvoices.Columns["Grand Total"].FillWeight = 100;
+                                if (gridInvoices.Columns["Invoice Due"] != null) gridInvoices.Columns["Invoice Due"].FillWeight = 100;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error loading sold invoices details: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+
+            private void LoadInvoiceItems(int saleId)
+            {
+                try
+                {
+                    using (SqlConnection conn = new SqlConnection(DatabaseHelper.ConnectionString))
+                    {
+                        conn.Open();
+                        string query = @"
+                            SELECT p.Code as [Product Code], p.Name as [Product Name],
+                                   sd.Quantity as [Qty], sd.UnitPrice as [Unit Price], sd.Total as [Total Amount]
+                            FROM SaleDetails sd
+                            INNER JOIN Products p ON sd.ProductId = p.Id
+                            WHERE sd.SaleId = @saleId";
+
+                        using (SqlCommand cmd = new SqlCommand(query, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@saleId", saleId);
+                            using (SqlDataAdapter da = new SqlDataAdapter(cmd))
+                            {
+                                DataTable dt = new DataTable();
+                                da.Fill(dt);
+                                gridItems.DataSource = dt;
+
+                                if (gridItems.Columns["Unit Price"] != null) gridItems.Columns["Unit Price"].DefaultCellStyle.Format = "N2";
+                                if (gridItems.Columns["Total Amount"] != null) gridItems.Columns["Total Amount"].DefaultCellStyle.Format = "N2";
+
+                                if (gridItems.Columns["Product Code"] != null) gridItems.Columns["Product Code"].FillWeight = 80;
+                                if (gridItems.Columns["Product Name"] != null) gridItems.Columns["Product Name"].FillWeight = 180;
+                                if (gridItems.Columns["Qty"] != null) gridItems.Columns["Qty"].FillWeight = 50;
+                                if (gridItems.Columns["Unit Price"] != null) gridItems.Columns["Unit Price"].FillWeight = 70;
+                                if (gridItems.Columns["Total Amount"] != null) gridItems.Columns["Total Amount"].FillWeight = 80;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error loading invoice items: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
