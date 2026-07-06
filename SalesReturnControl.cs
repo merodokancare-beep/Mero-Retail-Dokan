@@ -22,6 +22,7 @@ namespace MeroDokan
         private int activeSaleId = 0;
         private DataTable returnTable;
         private decimal refundTotalAmount = 0;
+        private decimal discountRatio = 0;
 
         public SalesReturnControl()
         {
@@ -263,7 +264,7 @@ namespace MeroDokan
             if (gridReturnItems.Columns["ReturnedQty"] != null) gridReturnItems.Columns["ReturnedQty"].HeaderText = "Returned";
             if (gridReturnItems.Columns["Price"] != null)
             {
-                gridReturnItems.Columns["Price"].HeaderText = "Price";
+                gridReturnItems.Columns["Price"].HeaderText = "Refund Price";
                 gridReturnItems.Columns["Price"].DefaultCellStyle.Format = "N2";
             }
             if (gridReturnItems.Columns["ReturnQty"] != null) gridReturnItems.Columns["ReturnQty"].HeaderText = "Return Qty";
@@ -305,7 +306,7 @@ namespace MeroDokan
 
                     // 1. Load Sales Invoice details
                     string salesSql = @"
-                        SELECT s.Id, c.Name as CustomerName, s.SaleDate, s.GrandTotal, s.PaymentMethod
+                        SELECT s.Id, c.Name as CustomerName, s.SaleDate, s.SubTotal, s.Discount, s.GrandTotal, s.PaymentMethod
                         FROM Sales s
                         LEFT JOIN Customers c ON s.CustomerId = c.Id
                         WHERE s.InvoiceNumber = @invNum";
@@ -322,6 +323,10 @@ namespace MeroDokan
                                 lblDateVal.Text = Convert.ToDateTime(rdr["SaleDate"]).ToString("yyyy-MM-dd HH:mm");
                                 lblOriginalTotalVal.Text = $"Rs. {Convert.ToDecimal(rdr["GrandTotal"]):N2}";
                                 lblPaymentModeVal.Text = rdr["PaymentMethod"].ToString();
+
+                                decimal subTotal = Convert.ToDecimal(rdr["SubTotal"]);
+                                decimal discount = Convert.ToDecimal(rdr["Discount"]);
+                                discountRatio = subTotal > 0 ? Math.Min(discount / subTotal, 1) : 0;
                             }
                             else
                             {
@@ -352,13 +357,16 @@ namespace MeroDokan
                         {
                             while (rdr.Read())
                             {
+                                decimal originalPrice = Convert.ToDecimal(rdr["Price"]);
+                                decimal refundPrice = Math.Round(originalPrice - (originalPrice * discountRatio), 2);
+
                                 returnTable.Rows.Add(
                                     rdr["ProductId"],
                                     rdr["Code"],
                                     rdr["Name"],
                                     rdr["SoldQty"],
                                     rdr["AlreadyReturnedQty"],
-                                    rdr["Price"],
+                                    refundPrice,
                                     0, // ReturnQty defaults to 0
                                     "Resellable" // Default condition
                                 );
@@ -392,6 +400,7 @@ namespace MeroDokan
         private void ResetInvoiceSummaries()
         {
             activeSaleId = 0;
+            discountRatio = 0;
             lblCustomerVal.Text = "--";
             lblDateVal.Text = "--";
             lblOriginalTotalVal.Text = "--";
