@@ -29,6 +29,7 @@ namespace MeroDokan
         private Button btnCategory;
         private Button btnProducts;
         private Button btnStock;
+        private Button btnStockLedger;
         private Button btnPurchases;
         private Button btnSales;
         private Button btnSalesReturn;
@@ -154,6 +155,10 @@ namespace MeroDokan
             btnStock = CreateNavButton("  📈   Stock & Inventory", btnHeight);
             btnStock.Click += (s, e) => ShowView(new StockControl(), btnStock, "Inventory Stock Ledger");
             sidebarMenuPanel.Controls.Add(btnStock);
+
+            btnStockLedger = CreateNavButton("  📖   Stock Ledger Book", btnHeight);
+            btnStockLedger.Click += (s, e) => ShowView(new StockLedgerControl(), btnStockLedger, "Daily Stock Ledger Book");
+            sidebarMenuPanel.Controls.Add(btnStockLedger);
 
             btnSales = CreateNavButton("  🛒   Sales Billing", btnHeight);
             btnSales.Click += (s, e) => ShowView(new SalesBillingControl(), btnSales, "Retail Checkout Counter");
@@ -372,7 +377,7 @@ namespace MeroDokan
         private void ShowView(UserControl view, Button activeBtn, string headerTitle)
         {
             // Update Active State Visuals on Sidebar Buttons
-            Button[] navButtons = { btnDashboard, btnCategory, btnProducts, btnStock, btnPurchases, btnSales, btnSalesReturn, btnSettlement, btnCustomers, btnSuppliers, btnReports, btnBackup, btnUserManagement, btnSettings };
+            Button[] navButtons = { btnDashboard, btnCategory, btnProducts, btnStock, btnStockLedger, btnPurchases, btnSales, btnSalesReturn, btnSettlement, btnCustomers, btnSuppliers, btnReports, btnBackup, btnUserManagement, btnSettings };
             foreach (var b in navButtons)
             {
                 b.BackColor = Color.Transparent;
@@ -430,7 +435,7 @@ namespace MeroDokan
             if (lblSubtitle != null) lblSubtitle.ForeColor = Theme.TextDark;
 
             // Redraw navigation buttons
-            Button[] navButtons = { btnDashboard, btnCategory, btnProducts, btnStock, btnPurchases, btnSales, btnSalesReturn, btnSettlement, btnCustomers, btnSuppliers, btnReports, btnBackup, btnUserManagement, btnSettings };
+            Button[] navButtons = { btnDashboard, btnCategory, btnProducts, btnStock, btnStockLedger, btnPurchases, btnSales, btnSalesReturn, btnSettlement, btnCustomers, btnSuppliers, btnReports, btnBackup, btnUserManagement, btnSettings };
             foreach (var b in navButtons)
             {
                 if (b == null) continue;

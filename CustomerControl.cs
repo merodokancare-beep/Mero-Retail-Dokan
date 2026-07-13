@@ -13,7 +13,6 @@ namespace MeroDokan
         private Button btnAdd;
         private Button btnEdit;
         private Button btnDelete;
-        private Button btnRecordPayment;
 
         public CustomerControl()
         {
@@ -93,14 +92,6 @@ namespace MeroDokan
             Theme.StyleDangerButton(btnDelete);
             btnDelete.Click += BtnDelete_Click;
             actionPanel.Controls.Add(btnDelete);
-
-            btnRecordPayment = new Button();
-            btnRecordPayment.Text = "💳 Record Payment";
-            btnRecordPayment.Size = new Size(180, 40);
-            btnRecordPayment.Location = new Point(540, 0);
-            Theme.StyleSuccessButton(btnRecordPayment);
-            btnRecordPayment.Click += BtnRecordPayment_Click;
-            actionPanel.Controls.Add(btnRecordPayment);
 
             this.Controls.Add(actionPanel);
         }
@@ -263,33 +254,7 @@ namespace MeroDokan
             }
         }
 
-        private void BtnRecordPayment_Click(object sender, EventArgs e)
-        {
-            if (gridCustomers.SelectedRows.Count == 0)
-            {
-                MessageBox.Show("Please select a customer to record payment.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
 
-            DataGridViewRow selectedRow = gridCustomers.SelectedRows[0];
-            int customerId = Convert.ToInt32(selectedRow.Cells["Id"].Value);
-            string customerName = selectedRow.Cells["Name"].Value.ToString();
-            decimal currentDue = Convert.ToDecimal(selectedRow.Cells["Due Balance"].Value);
-
-            if (customerName == "Walk-in Customer")
-            {
-                MessageBox.Show("Cannot record payments for 'Walk-in Customer'.", "Action Restrained", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            using (RecordPaymentDialog dlg = new RecordPaymentDialog(customerId, customerName, currentDue))
-            {
-                if (dlg.ShowDialog() == DialogResult.OK)
-                {
-                    LoadCustomers();
-                }
-            }
-        }
 
         private void GridCustomers_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
         {
@@ -331,6 +296,7 @@ namespace MeroDokan
             {
                 dlg.ShowDialog();
             }
+            LoadCustomers();
         }
 
         // Nested Dialog to view sold products & payment breakup for a customer
@@ -340,9 +306,11 @@ namespace MeroDokan
             private string customerName;
             private decimal dueBalance;
 
+            private Label lblHeader;
             private DataGridView gridInvoices;
             private DataGridView gridItems;
             private Button btnClose;
+            private Button btnRecordPayment;
 
             public CustomerPurchasedItemsDialog(int customerId, string customerName, decimal dueBalance)
             {
@@ -366,7 +334,7 @@ namespace MeroDokan
                 this.Font = Theme.MainFont;
                 this.ForeColor = Theme.TextLight;
 
-                Label lblHeader = new Label();
+                lblHeader = new Label();
                 lblHeader.Text = dueBalance > 0 
                     ? $"Outstanding Unpaid Invoices for {customerName} (Net Dues: Rs. {dueBalance:N2})"
                     : $"Sales History for {customerName}";
@@ -397,6 +365,15 @@ namespace MeroDokan
                 Theme.StyleGrid(gridItems);
                 this.Controls.Add(gridItems);
 
+                btnRecordPayment = new Button();
+                btnRecordPayment.Text = "💳 Record Payment";
+                btnRecordPayment.Size = new Size(180, 40);
+                btnRecordPayment.Location = new Point(610, 465);
+                Theme.StyleSuccessButton(btnRecordPayment);
+                btnRecordPayment.Click += BtnRecordPayment_Click;
+                btnRecordPayment.Enabled = (dueBalance > 0 && customerName != "Walk-in Customer");
+                this.Controls.Add(btnRecordPayment);
+
                 btnClose = new Button();
                 btnClose.Text = "Close";
                 btnClose.Size = new Size(130, 40);
@@ -406,6 +383,69 @@ namespace MeroDokan
                 this.Controls.Add(btnClose);
 
                 this.CancelButton = btnClose;
+            }
+
+            private void BtnRecordPayment_Click(object sender, EventArgs e)
+            {
+                int? selectedSaleId = null;
+                string selectedInvoiceNo = "";
+                decimal paymentAmount = dueBalance;
+
+                if (gridInvoices.CurrentRow != null)
+                {
+                    object idVal = gridInvoices.CurrentRow.Cells["Id"].Value;
+                    object numVal = gridInvoices.CurrentRow.Cells["Invoice No"].Value;
+                    object dueVal = gridInvoices.CurrentRow.Cells["Invoice Due"].Value;
+
+                    if (idVal != null && idVal != DBNull.Value)
+                    {
+                        selectedSaleId = Convert.ToInt32(idVal);
+                        selectedInvoiceNo = numVal?.ToString() ?? "";
+                        paymentAmount = Convert.ToDecimal(dueVal);
+                    }
+                }
+
+                using (RecordPaymentDialog dlg = new RecordPaymentDialog(customerId, customerName, paymentAmount, selectedSaleId, selectedInvoiceNo))
+                {
+                    if (dlg.ShowDialog() == DialogResult.OK)
+                    {
+                        UpdateDueBalance();
+                        LoadItems();
+                    }
+                }
+            }
+
+            private decimal GetLatestDueBalance()
+            {
+                try
+                {
+                    using (SqlConnection conn = new SqlConnection(DatabaseHelper.ConnectionString))
+                    {
+                        conn.Open();
+                        string query = @"
+                            SELECT (ISNULL((SELECT SUM(DueAmount) FROM Sales WHERE CustomerId = @custId), 0) -
+                                    ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE CustomerId = @custId), 0))";
+                        using (SqlCommand cmd = new SqlCommand(query, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@custId", customerId);
+                            object val = cmd.ExecuteScalar();
+                            return val != DBNull.Value ? Convert.ToDecimal(val) : 0;
+                        }
+                    }
+                }
+                catch
+                {
+                    return 0;
+                }
+            }
+
+            private void UpdateDueBalance()
+            {
+                this.dueBalance = GetLatestDueBalance();
+                lblHeader.Text = dueBalance > 0 
+                    ? $"Outstanding Unpaid Invoices for {customerName} (Net Dues: Rs. {dueBalance:N2})"
+                    : $"Sales History for {customerName}";
+                btnRecordPayment.Enabled = (dueBalance > 0 && customerName != "Walk-in Customer");
             }
 
             private void GridInvoices_SelectionChanged(object sender, EventArgs e)
@@ -760,6 +800,8 @@ namespace MeroDokan
             private int customerId;
             private string customerName;
             private decimal currentDue;
+            private int? targetSaleId = null;
+            private string invoiceNumber = string.Empty;
 
             private Label lblCustomerName;
             private Label lblOutstandingDue;
@@ -769,11 +811,13 @@ namespace MeroDokan
             private Button btnSave;
             private Button btnCancel;
 
-            public RecordPaymentDialog(int customerId, string customerName, decimal currentDue)
+            public RecordPaymentDialog(int customerId, string customerName, decimal currentDue, int? targetSaleId = null, string invoiceNumber = "")
             {
                 this.customerId = customerId;
                 this.customerName = customerName;
                 this.currentDue = currentDue;
+                this.targetSaleId = targetSaleId;
+                this.invoiceNumber = invoiceNumber;
                 InitializeComponent();
             }
 
@@ -800,7 +844,9 @@ namespace MeroDokan
 
                 // Customer Info
                 lblCustomerName = new Label();
-                lblCustomerName.Text = $"Customer: {customerName}";
+                lblCustomerName.Text = targetSaleId != null && !string.IsNullOrEmpty(invoiceNumber)
+                    ? $"Customer: {customerName} | Invoice: {invoiceNumber}"
+                    : $"Customer: {customerName}";
                 lblCustomerName.Location = new Point(20, startY);
                 lblCustomerName.AutoSize = true;
                 Theme.StyleLabel(lblCustomerName, Theme.TextLight, Theme.BoldFont);
@@ -808,7 +854,9 @@ namespace MeroDokan
 
                 // Outstanding Due
                 lblOutstandingDue = new Label();
-                lblOutstandingDue.Text = $"Outstanding Due: Rs. {currentDue:N2}";
+                lblOutstandingDue.Text = targetSaleId != null 
+                    ? $"Invoice Due: Rs. {currentDue:N2}"
+                    : $"Outstanding Due: Rs. {currentDue:N2}";
                 lblOutstandingDue.Location = new Point(20, startY + 25);
                 lblOutstandingDue.AutoSize = true;
                 Theme.StyleLabel(lblOutstandingDue, Theme.Success, Theme.BoldFont);
@@ -897,7 +945,8 @@ namespace MeroDokan
 
                 if (amount > currentDue)
                 {
-                    DialogResult confirm = MessageBox.Show($"The entered amount (Rs. {amount:N2}) is greater than the outstanding due (Rs. {currentDue:N2}).\nDo you want to proceed?", "Confirm Overpayment", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    string dueType = targetSaleId != null ? "invoice due" : "outstanding due";
+                    DialogResult confirm = MessageBox.Show($"The entered amount (Rs. {amount:N2}) is greater than the {dueType} (Rs. {currentDue:N2}).\nDo you want to proceed?", "Confirm Overpayment", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                     if (confirm != DialogResult.Yes)
                     {
                         return;
@@ -910,88 +959,121 @@ namespace MeroDokan
                     {
                         conn.Open();
 
-                        // 1. Fetch customer's unpaid invoices
-                        var unpaidSales = new System.Collections.Generic.List<UnpaidSaleInfo>();
-                        string getUnpaidSalesSql = @"
-                            SELECT s.Id, s.DueAmount,
-                                   ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE SaleId = s.Id), 0) as PaidSoFar
-                            FROM Sales s
-                            WHERE s.CustomerId = @custId AND s.DueAmount > 0
-                            ORDER BY s.SaleDate ASC, s.Id ASC";
-
-                        using (SqlCommand cmd = new SqlCommand(getUnpaidSalesSql, conn))
+                        if (targetSaleId != null)
                         {
-                            cmd.Parameters.AddWithValue("@custId", customerId);
-                            using (SqlDataReader rdr = cmd.ExecuteReader())
+                            // 1. Record payment linked specifically to targetSaleId inside SQL Transaction
+                            using (SqlTransaction trans = conn.BeginTransaction())
                             {
-                                while (rdr.Read())
+                                try
                                 {
-                                    int saleId = rdr.GetInt32(0);
-                                    decimal due = rdr.GetDecimal(1);
-                                    decimal paid = rdr.GetDecimal(2);
-                                    decimal remaining = due - paid;
-                                    if (remaining > 0)
-                                    {
-                                        unpaidSales.Add(new UnpaidSaleInfo { Id = saleId, Remaining = remaining });
-                                    }
-                                }
-                            }
-                        }
-
-                        // 2. Allocate payment amount inside SQL Transaction
-                        using (SqlTransaction trans = conn.BeginTransaction())
-                        {
-                            try
-                            {
-                                decimal remainingPay = amount;
-                                int saleIdx = 0;
-
-                                while (remainingPay > 0 && saleIdx < unpaidSales.Count)
-                                {
-                                    var activeSale = unpaidSales[saleIdx];
-                                    decimal alloc = Math.Min(remainingPay, activeSale.Remaining);
-
                                     string insertPaySql = @"
                                         INSERT INTO CustomerPayments (CustomerId, PaymentDate, Amount, PaymentMethod, Remarks, CreatedBy, SaleId)
                                         VALUES (@custId, GETDATE(), @amount, @payMethod, @remarks, @userId, @saleId)";
                                     using (SqlCommand cmd = new SqlCommand(insertPaySql, conn, trans))
                                     {
                                         cmd.Parameters.AddWithValue("@custId", customerId);
-                                        cmd.Parameters.AddWithValue("@amount", alloc);
+                                        cmd.Parameters.AddWithValue("@amount", amount);
                                         cmd.Parameters.AddWithValue("@payMethod", payMethod);
                                         cmd.Parameters.AddWithValue("@remarks", remarks);
                                         cmd.Parameters.AddWithValue("@userId", Session.UserId);
-                                        cmd.Parameters.AddWithValue("@saleId", activeSale.Id);
+                                        cmd.Parameters.AddWithValue("@saleId", targetSaleId.Value);
                                         cmd.ExecuteNonQuery();
                                     }
 
-                                    remainingPay -= alloc;
-                                    saleIdx++;
+                                    trans.Commit();
                                 }
-
-                                // 3. Record overpayment remainder as unlinked (SaleId = null)
-                                if (remainingPay > 0)
+                                catch
                                 {
-                                    string insertPaySql = @"
-                                        INSERT INTO CustomerPayments (CustomerId, PaymentDate, Amount, PaymentMethod, Remarks, CreatedBy, SaleId)
-                                        VALUES (@custId, GETDATE(), @amount, @payMethod, @remarks, @userId, NULL)";
-                                    using (SqlCommand cmd = new SqlCommand(insertPaySql, conn, trans))
+                                    trans.Rollback();
+                                    throw;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // 1. Fetch customer's unpaid invoices
+                            var unpaidSales = new System.Collections.Generic.List<UnpaidSaleInfo>();
+                            string getUnpaidSalesSql = @"
+                                SELECT s.Id, s.DueAmount,
+                                       ISNULL((SELECT SUM(Amount) FROM CustomerPayments WHERE SaleId = s.Id), 0) as PaidSoFar
+                                FROM Sales s
+                                WHERE s.CustomerId = @custId AND s.DueAmount > 0
+                                ORDER BY s.SaleDate ASC, s.Id ASC";
+
+                            using (SqlCommand cmd = new SqlCommand(getUnpaidSalesSql, conn))
+                            {
+                                cmd.Parameters.AddWithValue("@custId", customerId);
+                                using (SqlDataReader rdr = cmd.ExecuteReader())
+                                {
+                                    while (rdr.Read())
                                     {
-                                        cmd.Parameters.AddWithValue("@custId", customerId);
-                                        cmd.Parameters.AddWithValue("@amount", remainingPay);
-                                        cmd.Parameters.AddWithValue("@payMethod", payMethod);
-                                        cmd.Parameters.AddWithValue("@remarks", remarks);
-                                        cmd.Parameters.AddWithValue("@userId", Session.UserId);
-                                        cmd.ExecuteNonQuery();
+                                        int saleId = rdr.GetInt32(0);
+                                        decimal due = rdr.GetDecimal(1);
+                                        decimal paid = rdr.GetDecimal(2);
+                                        decimal remaining = due - paid;
+                                        if (remaining > 0)
+                                        {
+                                            unpaidSales.Add(new UnpaidSaleInfo { Id = saleId, Remaining = remaining });
+                                        }
                                     }
                                 }
-
-                                trans.Commit();
                             }
-                            catch
+
+                            // 2. Allocate payment amount inside SQL Transaction
+                            using (SqlTransaction trans = conn.BeginTransaction())
                             {
-                                trans.Rollback();
-                                throw;
+                                try
+                                {
+                                    decimal remainingPay = amount;
+                                    int saleIdx = 0;
+
+                                    while (remainingPay > 0 && saleIdx < unpaidSales.Count)
+                                    {
+                                        var activeSale = unpaidSales[saleIdx];
+                                        decimal alloc = Math.Min(remainingPay, activeSale.Remaining);
+
+                                        string insertPaySql = @"
+                                            INSERT INTO CustomerPayments (CustomerId, PaymentDate, Amount, PaymentMethod, Remarks, CreatedBy, SaleId)
+                                            VALUES (@custId, GETDATE(), @amount, @payMethod, @remarks, @userId, @saleId)";
+                                        using (SqlCommand cmd = new SqlCommand(insertPaySql, conn, trans))
+                                        {
+                                            cmd.Parameters.AddWithValue("@custId", customerId);
+                                            cmd.Parameters.AddWithValue("@amount", alloc);
+                                            cmd.Parameters.AddWithValue("@payMethod", payMethod);
+                                            cmd.Parameters.AddWithValue("@remarks", remarks);
+                                            cmd.Parameters.AddWithValue("@userId", Session.UserId);
+                                            cmd.Parameters.AddWithValue("@saleId", activeSale.Id);
+                                            cmd.ExecuteNonQuery();
+                                        }
+
+                                        remainingPay -= alloc;
+                                        saleIdx++;
+                                    }
+
+                                    // 3. Record overpayment remainder as unlinked (SaleId = null)
+                                    if (remainingPay > 0)
+                                    {
+                                        string insertPaySql = @"
+                                            INSERT INTO CustomerPayments (CustomerId, PaymentDate, Amount, PaymentMethod, Remarks, CreatedBy, SaleId)
+                                            VALUES (@custId, GETDATE(), @amount, @payMethod, @remarks, @userId, NULL)";
+                                        using (SqlCommand cmd = new SqlCommand(insertPaySql, conn, trans))
+                                        {
+                                            cmd.Parameters.AddWithValue("@custId", customerId);
+                                            cmd.Parameters.AddWithValue("@amount", remainingPay);
+                                            cmd.Parameters.AddWithValue("@payMethod", payMethod);
+                                            cmd.Parameters.AddWithValue("@remarks", remarks);
+                                            cmd.Parameters.AddWithValue("@userId", Session.UserId);
+                                            cmd.ExecuteNonQuery();
+                                        }
+                                    }
+
+                                    trans.Commit();
+                                }
+                                catch
+                                {
+                                    trans.Rollback();
+                                    throw;
+                                }
                             }
                         }
                     }

@@ -16,6 +16,13 @@ namespace MeroDokan
         public StockControl()
         {
             InitializeComponent();
+            
+            // Restrict Manual Stock Adjustment to Admin users only
+            if (!string.Equals(Session.Role, "Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                btnAdjust.Visible = false;
+            }
+
             LoadStock();
             this.Load += (s, e) => txtSearch.Focus();
         }

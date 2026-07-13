@@ -903,6 +903,7 @@ Date Filter Period: {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}
             gridPurchaseReport.Location = new Point(20, 75);
             gridPurchaseReport.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
             Theme.StyleGrid(gridPurchaseReport);
+            gridPurchaseReport.CellDoubleClick += GridPurchaseReport_CellDoubleClick;
             page.Controls.Add(gridPurchaseReport);
 
             // Summary Label
@@ -1849,6 +1850,142 @@ Date Filter Period: {fromDate:yyyy-MM-dd} to {toDate:yyyy-MM-dd}
 
                 // Footer Message
                 g.DrawString("Thank you for shopping at Mero Dokan! Please visit us again.", fBold, bDark, startX + 130, rowY);
+            }
+        }
+
+        private void GridPurchaseReport_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0)
+            {
+                string reportType = comboPurchaseReportType?.SelectedItem?.ToString() ?? "Invoice Summary";
+                if (reportType != "Invoice Summary")
+                    return;
+
+                DataGridViewRow row = gridPurchaseReport.Rows[e.RowIndex];
+                if (row.Cells["Purchase No"] != null && row.Cells["Purchase No"].Value != null)
+                {
+                    string purchaseNo = row.Cells["Purchase No"].Value.ToString();
+                    string purchaseDate = row.Cells["Purchase Date"]?.Value?.ToString() ?? "";
+                    string supplier = row.Cells["Supplier"]?.Value?.ToString() ?? "";
+
+                    ShowPurchaseBreakup(purchaseNo, purchaseDate, supplier);
+                }
+            }
+        }
+
+        private void ShowPurchaseBreakup(string purchaseNo, string purchaseDate, string supplier)
+        {
+            using (var dlg = new PurchaseBreakupDialog(purchaseNo, purchaseDate, supplier))
+            {
+                dlg.ShowDialog();
+            }
+        }
+
+        private class PurchaseBreakupDialog : Form
+        {
+            private string purchaseNo;
+            private string purchaseDate;
+            private string supplier;
+
+            private DataGridView gridItems;
+            private Button btnClose;
+
+            public PurchaseBreakupDialog(string purchaseNo, string purchaseDate, string supplier)
+            {
+                this.purchaseNo = purchaseNo;
+                this.purchaseDate = purchaseDate;
+                this.supplier = supplier;
+                InitializeComponent();
+                LoadItems();
+            }
+
+            private void InitializeComponent()
+            {
+                this.Text = $"Purchase Items Breakup - {purchaseNo}";
+                this.ClientSize = new Size(800, 480);
+                this.AutoScaleMode = AutoScaleMode.Dpi;
+                this.FormBorderStyle = FormBorderStyle.FixedDialog;
+                this.MaximizeBox = false;
+                this.MinimizeBox = false;
+                this.StartPosition = FormStartPosition.CenterParent;
+                this.BackColor = Theme.Primary;
+                this.Font = Theme.MainFont;
+                this.ForeColor = Theme.TextLight;
+
+                Label lblHeader = new Label();
+                lblHeader.Text = $"Purchase Breakup for {purchaseNo}";
+                lblHeader.Location = new Point(20, 15);
+                lblHeader.AutoSize = true;
+                Theme.StyleLabel(lblHeader, Theme.TextLight, Theme.HeaderFont);
+                this.Controls.Add(lblHeader);
+
+                Label lblInfo = new Label();
+                lblInfo.Text = $"Date: {purchaseDate}   •   Supplier: {supplier}";
+                lblInfo.Location = new Point(20, 45);
+                lblInfo.AutoSize = true;
+                Theme.StyleLabel(lblInfo, Theme.TextDark, Theme.BoldFont);
+                this.Controls.Add(lblInfo);
+
+                gridItems = new DataGridView();
+                gridItems.Location = new Point(20, 80);
+                gridItems.Size = new Size(760, 320);
+                Theme.StyleGrid(gridItems);
+                this.Controls.Add(gridItems);
+
+                btnClose = new Button();
+                btnClose.Text = "Close";
+                btnClose.Size = new Size(120, 40);
+                btnClose.Location = new Point(660, 420);
+                Theme.StyleSecondaryButton(btnClose);
+                btnClose.Click += (s, e) => this.Close();
+                this.Controls.Add(btnClose);
+
+                this.CancelButton = btnClose;
+            }
+
+            private void LoadItems()
+            {
+                try
+                {
+                    using (SqlConnection conn = new SqlConnection(DatabaseHelper.ConnectionString))
+                    {
+                        conn.Open();
+                        string query = @"
+                            SELECT p.Code as [Product Code], 
+                                   p.Name as [Product Name], 
+                                   pd.Quantity as [Qty], 
+                                   pd.PurchasePrice as [Purchase Price], 
+                                   (pd.Quantity * pd.PurchasePrice) as [Total Cost]
+                            FROM PurchaseDetails pd
+                            INNER JOIN Products p ON pd.ProductId = p.Id
+                            INNER JOIN Purchases pur ON pd.PurchaseId = pur.Id
+                            WHERE pur.PurchaseNumber = @purchaseNo";
+
+                        using (SqlCommand cmd = new SqlCommand(query, conn))
+                        {
+                            cmd.Parameters.AddWithValue("@purchaseNo", purchaseNo);
+                            using (SqlDataAdapter da = new SqlDataAdapter(cmd))
+                            {
+                                DataTable dt = new DataTable();
+                                da.Fill(dt);
+                                gridItems.DataSource = dt;
+
+                                if (gridItems.Columns["Purchase Price"] != null) gridItems.Columns["Purchase Price"].DefaultCellStyle.Format = "N2";
+                                if (gridItems.Columns["Total Cost"] != null) gridItems.Columns["Total Cost"].DefaultCellStyle.Format = "N2";
+
+                                if (gridItems.Columns["Product Code"] != null) gridItems.Columns["Product Code"].FillWeight = 80;
+                                if (gridItems.Columns["Product Name"] != null) gridItems.Columns["Product Name"].FillWeight = 180;
+                                if (gridItems.Columns["Qty"] != null) gridItems.Columns["Qty"].FillWeight = 50;
+                                if (gridItems.Columns["Purchase Price"] != null) gridItems.Columns["Purchase Price"].FillWeight = 80;
+                                if (gridItems.Columns["Total Cost"] != null) gridItems.Columns["Total Cost"].FillWeight = 90;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error loading purchase details: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
     }
