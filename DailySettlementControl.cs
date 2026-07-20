@@ -16,6 +16,7 @@ namespace MeroDokan
         private Label lblDueToday;
         private Label lblPrevDueRepayments;
         private Label lblOpeningCashText;
+        private Label lblOnlinePayment;
         private Label lblExpectedCash;
         private TextBox txtActualCash;
         private TextBox txtRemarks;
@@ -35,6 +36,9 @@ namespace MeroDokan
         private decimal dueTodayUnpaid = 0;
         private decimal openingCash = 0;
         private decimal cashRefunds = 0;
+        private decimal onlineSales = 0;
+        private decimal onlineDueRepayments = 0;
+        private decimal totalOnlinePayment = 0;
 
         public DailySettlementControl()
         {
@@ -172,17 +176,32 @@ namespace MeroDokan
             Theme.StyleLabel(lblOpeningCashText, Theme.TextLight, Theme.BoldFont);
             cardMain.Controls.Add(lblOpeningCashText);
 
+            // Online Payment (Card/QR)
+            Label lblOnlineTitle = new Label();
+            lblOnlineTitle.Text = "Online Payment (Card/QR):";
+            lblOnlineTitle.Location = new Point(20, 155);
+            lblOnlineTitle.AutoSize = true;
+            Theme.StyleLabel(lblOnlineTitle, Theme.TextLight, Theme.MainFont);
+            cardMain.Controls.Add(lblOnlineTitle);
+
+            lblOnlinePayment = new Label();
+            lblOnlinePayment.Text = "Rs. 0.00";
+            lblOnlinePayment.Location = new Point(280, 155);
+            lblOnlinePayment.AutoSize = true;
+            Theme.StyleLabel(lblOnlinePayment, Theme.TextLight, Theme.BoldFont);
+            cardMain.Controls.Add(lblOnlinePayment);
+
             // Expected/Total Cash
             Label lblExpectedTitle = new Label();
             lblExpectedTitle.Text = "Total Cash in Drawer:";
-            lblExpectedTitle.Location = new Point(20, 155);
+            lblExpectedTitle.Location = new Point(20, 190);
             lblExpectedTitle.AutoSize = true;
             Theme.StyleLabel(lblExpectedTitle, Theme.TextLight, Theme.BoldFont);
             cardMain.Controls.Add(lblExpectedTitle);
 
             lblExpectedCash = new Label();
             lblExpectedCash.Text = "Rs. 0.00";
-            lblExpectedCash.Location = new Point(280, 155);
+            lblExpectedCash.Location = new Point(280, 190);
             lblExpectedCash.AutoSize = true;
             lblExpectedCash.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
             Theme.StyleLabel(lblExpectedCash, Theme.Success, lblExpectedCash.Font);
@@ -318,6 +337,15 @@ namespace MeroDokan
                         cashSales = Convert.ToDecimal(cmd.ExecuteScalar());
                     }
 
+                    // 1b. Online Sales Today
+                    string onlineSalesSql = "SELECT ISNULL(SUM(AmountPaid), 0) FROM Sales WHERE SaleDate >= @todayStart AND SaleDate < @todayEnd AND PaymentMethod IN ('Card', 'QR Pay')";
+                    using (SqlCommand cmd = new SqlCommand(onlineSalesSql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@todayStart", todayStart);
+                        cmd.Parameters.AddWithValue("@todayEnd", todayEnd);
+                        onlineSales = Convert.ToDecimal(cmd.ExecuteScalar());
+                    }
+
                     // 2. New Dues Created Today
                     string duesCreatedSql = "SELECT ISNULL(SUM(DueAmount), 0) FROM Sales WHERE SaleDate >= @todayStart AND SaleDate < @todayEnd";
                     using (SqlCommand cmd = new SqlCommand(duesCreatedSql, conn))
@@ -355,6 +383,15 @@ namespace MeroDokan
                     todayDueRepayments = totalRepayments - prevDueRepayments;
                     if (todayDueRepayments < 0) todayDueRepayments = 0;
 
+                    // 4b. Online Due Repayments Today (Card / QR Pay)
+                    string onlineRepaymentsSql = "SELECT ISNULL(SUM(Amount), 0) FROM CustomerPayments WHERE PaymentDate >= @todayStart AND PaymentDate < @todayEnd AND PaymentMethod IN ('Card', 'QR Pay')";
+                    using (SqlCommand cmd = new SqlCommand(onlineRepaymentsSql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@todayStart", todayStart);
+                        cmd.Parameters.AddWithValue("@todayEnd", todayEnd);
+                        onlineDueRepayments = Convert.ToDecimal(cmd.ExecuteScalar());
+                    }
+
                     // 5. Cash Refunds Today
                     string refundsSql = "SELECT ISNULL(SUM(CashRefund), 0) FROM SalesReturns WHERE ReturnDate >= @todayStart AND ReturnDate < @todayEnd";
                     using (SqlCommand cmd = new SqlCommand(refundsSql, conn))
@@ -366,13 +403,16 @@ namespace MeroDokan
                 }
 
                 // Calculations
-                totalSaleToday = cashSales + duesCreated - cashRefunds;
+                totalSaleToday = cashSales + onlineSales + duesCreated - cashRefunds;
                 dueTodayUnpaid = duesCreated - todayDueRepayments;
                 if (dueTodayUnpaid < 0) dueTodayUnpaid = 0;
+
+                totalOnlinePayment = onlineSales + onlineDueRepayments;
 
                 lblTotalSaleToday.Text = $"Rs. {totalSaleToday:N2}";
                 lblDueToday.Text = $"Rs. {dueTodayUnpaid:N2}";
                 lblPrevDueRepayments.Text = $"Rs. {prevDueRepayments:N2}";
+                lblOnlinePayment.Text = $"Rs. {totalOnlinePayment:N2}";
 
                 UpdateCalculations();
             }
@@ -449,10 +489,10 @@ namespace MeroDokan
                         }
                     }
 
-                    // Save (Note: we map CashSales as cashSales, DueCollections as prevDueRepayments + todayDueRepayments, CardQRSales as 0 (not used), DuesCreated as duesCreated)
+                    // Save
                     string query = @"
                         INSERT INTO DailySettlements (SettlementDate, OpeningCash, CashSales, DueCollections, CardQRSales, DuesCreated, ExpectedCash, ActualCash, Variance, SettlementBy, Remarks, Refunds)
-                        VALUES (@date, @opening, @sales, @collections, 0.00, @dues, @expected, @actual, @variance, @user, @remarks, @refunds)";
+                        VALUES (@date, @opening, @sales, @collections, @cardQRSales, @dues, @expected, @actual, @variance, @user, @remarks, @refunds)";
                     
                     using (SqlCommand cmd = new SqlCommand(query, conn))
                     {
@@ -460,6 +500,7 @@ namespace MeroDokan
                         cmd.Parameters.AddWithValue("@opening", openingCash);
                         cmd.Parameters.AddWithValue("@sales", cashSales);
                         cmd.Parameters.AddWithValue("@collections", prevDueRepayments + todayDueRepayments);
+                        cmd.Parameters.AddWithValue("@cardQRSales", totalOnlinePayment);
                         cmd.Parameters.AddWithValue("@dues", duesCreated);
                         cmd.Parameters.AddWithValue("@expected", expectedCash);
                         cmd.Parameters.AddWithValue("@actual", actualCash);
@@ -493,6 +534,7 @@ namespace MeroDokan
                                s.OpeningCash as [Opening Cash],
                                s.CashSales as [Cash Sales],
                                s.DueCollections as [Dues Collections],
+                               s.CardQRSales as [Online Payment],
                                s.Refunds as [Cash Refunds],
                                s.ExpectedCash as [Expected Cash],
                                s.ActualCash as [Actual Cash],
@@ -513,6 +555,7 @@ namespace MeroDokan
                         if (gridHistory.Columns["Opening Cash"] != null) gridHistory.Columns["Opening Cash"].Visible = false;
                         if (gridHistory.Columns["Cash Sales"] != null) gridHistory.Columns["Cash Sales"].DefaultCellStyle.Format = "N2";
                         if (gridHistory.Columns["Dues Collections"] != null) gridHistory.Columns["Dues Collections"].DefaultCellStyle.Format = "N2";
+                        if (gridHistory.Columns["Online Payment"] != null) gridHistory.Columns["Online Payment"].DefaultCellStyle.Format = "N2";
                         if (gridHistory.Columns["Cash Refunds"] != null) gridHistory.Columns["Cash Refunds"].DefaultCellStyle.Format = "N2";
                         if (gridHistory.Columns["Expected Cash"] != null) gridHistory.Columns["Expected Cash"].DefaultCellStyle.Format = "N2";
                         if (gridHistory.Columns["Actual Cash"] != null) gridHistory.Columns["Actual Cash"].DefaultCellStyle.Format = "N2";
@@ -522,6 +565,7 @@ namespace MeroDokan
                         if (gridHistory.Columns["Opening Cash"] != null) gridHistory.Columns["Opening Cash"].FillWeight = 90;
                         if (gridHistory.Columns["Cash Sales"] != null) gridHistory.Columns["Cash Sales"].FillWeight = 90;
                         if (gridHistory.Columns["Dues Collections"] != null) gridHistory.Columns["Dues Collections"].FillWeight = 90;
+                        if (gridHistory.Columns["Online Payment"] != null) gridHistory.Columns["Online Payment"].FillWeight = 100;
                         if (gridHistory.Columns["Cash Refunds"] != null) gridHistory.Columns["Cash Refunds"].FillWeight = 90;
                         if (gridHistory.Columns["Expected Cash"] != null) gridHistory.Columns["Expected Cash"].FillWeight = 95;
                         if (gridHistory.Columns["Actual Cash"] != null) gridHistory.Columns["Actual Cash"].FillWeight = 95;
