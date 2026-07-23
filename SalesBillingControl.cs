@@ -492,15 +492,7 @@ namespace MeroDokan
                             comboCustomer.ValueMember = "Id";
 
                             // Set default to Walk-in Customer if exists
-                            for (int i = 0; i < comboCustomer.Items.Count; i++)
-                            {
-                                DataRowView drv = comboCustomer.Items[i] as DataRowView;
-                                if (drv["Name"].ToString() == "Walk-in Customer")
-                                {
-                                    comboCustomer.SelectedIndex = i;
-                                    break;
-                                }
-                            }
+                            SelectDefaultCustomer();
                         }
                     }
 
@@ -509,6 +501,30 @@ namespace MeroDokan
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading checkout directories: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void SelectDefaultCustomer()
+        {
+            if (comboCustomer == null || comboCustomer.Items.Count == 0) return;
+
+            for (int i = 0; i < comboCustomer.Items.Count; i++)
+            {
+                DataRowView drv = comboCustomer.Items[i] as DataRowView;
+                if (drv != null && drv["Name"] != DBNull.Value)
+                {
+                    string name = drv["Name"].ToString();
+                    if (name.IndexOf("walk", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        comboCustomer.SelectedIndex = i;
+                        return;
+                    }
+                }
+            }
+
+            if (comboCustomer.Items.Count > 0)
+            {
+                comboCustomer.SelectedIndex = 0;
             }
         }
 
@@ -921,12 +937,23 @@ namespace MeroDokan
                         previewDlg.ShowDialog();
                     }
 
-                    // Clear Screen
+                    // Clear Screen & Reset Form state
                     cartTable.Clear();
                     txtDiscount.Text = "0.00";
                     txtTax.Text = "0";
+                    txtAmountPaid.Text = "0.00";
                     CalculateCheckoutTotals();
                     
+                    // Reset Payment Dropdown to Cash
+                    if (comboPaymentMethod != null && comboPaymentMethod.Items.Count > 0)
+                    {
+                        int cashIdx = comboPaymentMethod.Items.IndexOf("Cash");
+                        comboPaymentMethod.SelectedIndex = cashIdx >= 0 ? cashIdx : 0;
+                    }
+
+                    // Reset Customer Dropdown to Walk-in Customer
+                    SelectDefaultCustomer();
+
                     txtProductCode.Clear();
                     txtPrice.Text = "0.00";
                     txtQty.Text = "1";
@@ -935,7 +962,13 @@ namespace MeroDokan
                     currentProductName = "";
                     lblAvailableStock.Text = "Available Stock: --";
                     lblAvailableStock.ForeColor = Theme.Warning;
+                    
                     txtProductCode.Focus();
+                    this.BeginInvoke((MethodInvoker)delegate
+                    {
+                        txtProductCode.Focus();
+                        txtProductCode.Select();
+                    });
                 }
                 catch (Exception ex)
                 {
