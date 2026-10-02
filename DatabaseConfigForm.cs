@@ -35,6 +35,7 @@ namespace MeroDokan
         private void InitializeComponent()
         {
             this.Text = "Database Connection Configuration";
+            this.Icon = Theme.AppIcon;
             this.Size = new Size(500, 620);
             this.Font = Theme.MainFont;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;

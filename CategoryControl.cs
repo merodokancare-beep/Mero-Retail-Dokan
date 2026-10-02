@@ -57,17 +57,19 @@ namespace MeroDokan
             btnAdd.Click += BtnAdd_Click;
             this.Controls.Add(btnAdd);
 
-            // Search Panel container
+            // Search Panel container (anchored Top | Right to scale with screen width)
             Label lblSearchHeader = new Label();
             lblSearchHeader.Text = "Search Categories";
-            lblSearchHeader.Location = new Point(480, 65);
+            lblSearchHeader.Location = new Point(this.Width - 340, 62);
+            lblSearchHeader.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             lblSearchHeader.AutoSize = true;
             Theme.StyleLabel(lblSearchHeader, Theme.TextDark, Theme.BoldFont);
             this.Controls.Add(lblSearchHeader);
 
             Panel searchPanel = new Panel();
-            searchPanel.Size = new Size(300, 32);
-            searchPanel.Location = new Point(480, 90);
+            searchPanel.Size = new Size(320, 36);
+            searchPanel.Location = new Point(this.Width - 340, 85);
+            searchPanel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             searchPanel.BackColor = Theme.Primary;
             searchPanel.Padding = new Padding(8, 8, 8, 8);
 
@@ -83,7 +85,7 @@ namespace MeroDokan
 
             // GridView
             gridCategories = new DataGridView();
-            gridCategories.Size = new Size(910, 420);
+            gridCategories.Size = new Size(this.Width - 40, 420);
             gridCategories.Location = new Point(20, 145);
             gridCategories.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
             Theme.StyleGrid(gridCategories);
@@ -91,7 +93,7 @@ namespace MeroDokan
 
             // Action Buttons Panel
             Panel actionPanel = new Panel();
-            actionPanel.Size = new Size(910, 50);
+            actionPanel.Size = new Size(this.Width - 40, 50);
             actionPanel.Location = new Point(20, 580);
             actionPanel.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
 

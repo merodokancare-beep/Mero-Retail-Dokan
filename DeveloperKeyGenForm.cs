@@ -35,6 +35,7 @@ namespace MeroDokan
         private void InitializeComponent()
         {
             this.Text = "Developer Key Generator";
+            this.Icon = Theme.AppIcon;
             this.ClientSize = new Size(420, 360); // Guarantees exact client area dimension!
             this.AutoScaleMode = AutoScaleMode.Dpi; // Enables robust DPI layout auto-scaling!
             this.FormBorderStyle = FormBorderStyle.FixedDialog;

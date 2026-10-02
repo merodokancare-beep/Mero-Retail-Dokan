@@ -16,6 +16,7 @@ namespace MeroDokan
         private void InitializeComponent(string invoiceNumber)
         {
             this.Text = $"Invoice Details - {invoiceNumber}";
+            this.Icon = Theme.AppIcon;
             this.Size = new Size(1000, 450);
             this.StartPosition = FormStartPosition.CenterParent;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;

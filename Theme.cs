@@ -20,6 +20,35 @@ namespace MeroDokan
         public static Color Warning { get; set; } = Color.FromArgb(245, 158, 11);     // Amber 500 (Low stock warn)
         public static Color Danger { get; set; } = Color.FromArgb(239, 68, 68);       // Red 500 (Loss, Delete, Close)
 
+        private static Icon _appIcon = null;
+        public static Icon AppIcon
+        {
+            get
+            {
+                if (_appIcon == null)
+                {
+                    try
+                    {
+                        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                        string icoPath = System.IO.Path.Combine(baseDir, "app.ico");
+                        if (System.IO.File.Exists(icoPath))
+                        {
+                            _appIcon = new Icon(icoPath);
+                        }
+                        else
+                        {
+                            _appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                        }
+                    }
+                    catch
+                    {
+                        _appIcon = SystemIcons.Application;
+                    }
+                }
+                return _appIcon;
+            }
+        }
+
         public static Color AdjustBrightness(Color color, float correctionFactor)
         {
             float red = color.R;

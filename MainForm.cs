@@ -26,19 +26,23 @@ namespace MeroDokan
 
         // Sidebar Navigation Buttons
         private Button btnDashboard;
-        private Button btnCategory;
-        private Button btnProducts;
+        private Button btnMasterEntry;
+        private FlowLayoutPanel panelMasterSubmenu;
+        private Button btnSubProducts;
+        private Button btnSubCategory;
+        private Button btnSubCustomers;
+        private Button btnSubSuppliers;
+        private Button btnSubUsers;
+        private MasterEntryControl masterEntryView;
+        private bool isMasterSubmenuExpanded = false;
+        private Button btnPurchases;
         private Button btnStock;
         private Button btnStockLedger;
-        private Button btnPurchases;
         private Button btnSales;
         private Button btnSalesReturn;
         private Button btnSettlement;
-        private Button btnCustomers;
-        private Button btnSuppliers;
         private Button btnReports;
         private Button btnBackup;
-        private Button btnUserManagement;
         private Button btnSettings;
         private Button btnLogout;
         private PictureBox picHeaderAvatar;
@@ -63,7 +67,7 @@ namespace MeroDokan
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Theme.Secondary;
             this.Text = "MeroDokan - BDT Retail & Shop Management System";
-            this.Icon = SystemIcons.Application;
+            this.Icon = Theme.AppIcon;
 
             // 1. LEFT SIDEBAR PANEL
             sidebarPanel = new Panel();
@@ -96,18 +100,12 @@ namespace MeroDokan
             sidebarMenuPanel.Padding = new Padding(0, 5, 0, 5);
             sidebarPanel.Controls.Add(sidebarMenuPanel);
 
-            // Circular Logo in Sidebar - inside sidebarTopPanel
+            // App Logo in Sidebar - inside sidebarTopPanel
             picSidebarLogo = new PictureBox();
-            picSidebarLogo.Size = new Size(40, 40);
-            picSidebarLogo.Location = new Point(15, 15);
+            picSidebarLogo.Size = new Size(46, 46);
+            picSidebarLogo.Location = new Point(12, 12);
             picSidebarLogo.SizeMode = PictureBoxSizeMode.Zoom;
-            picSidebarLogo.BackColor = Color.FromArgb(17, 24, 39);
-            // Apply perfect circular clipping region
-            using (System.Drawing.Drawing2D.GraphicsPath gp = new System.Drawing.Drawing2D.GraphicsPath())
-            {
-                gp.AddEllipse(0, 0, picSidebarLogo.Width, picSidebarLogo.Height);
-                picSidebarLogo.Region = new Region(gp);
-            }
+            picSidebarLogo.BackColor = Color.Transparent;
             sidebarTopPanel.Controls.Add(picSidebarLogo);
 
             // Logo Name inside Sidebar next to circular logo - inside sidebarTopPanel
@@ -140,13 +138,54 @@ namespace MeroDokan
             btnDashboard.Click += (s, e) => ShowView(new DashboardControl(), btnDashboard, "Dashboard & Sales Performance");
             sidebarMenuPanel.Controls.Add(btnDashboard);
 
-            btnCategory = CreateNavButton("  📂   Category Master", btnHeight);
-            btnCategory.Click += (s, e) => ShowView(new CategoryControl(), btnCategory, "Category Master Catalog");
-            sidebarMenuPanel.Controls.Add(btnCategory);
+            // Master Entry Main Button & Collapsible Submenu
+            btnMasterEntry = CreateNavButton("  📁   Master Entry          ▸", btnHeight);
+            btnMasterEntry.Click += (s, e) => {
+                bool isMasterActive = (mainContentPanel.Controls.Count > 0 && mainContentPanel.Controls[0] is MasterEntryControl);
+                if (isMasterActive)
+                {
+                    ToggleMasterSubmenu();
+                }
+                else
+                {
+                    SetMasterSubmenuExpanded(true);
+                    OpenMasterEntry(masterEntryView?.ActiveTab ?? "Product");
+                }
+            };
+            sidebarMenuPanel.Controls.Add(btnMasterEntry);
 
-            btnProducts = CreateNavButton("  📦   Product Master", btnHeight);
-            btnProducts.Click += (s, e) => ShowView(new ProductControl(), btnProducts, "Product Master Catalog");
-            sidebarMenuPanel.Controls.Add(btnProducts);
+            panelMasterSubmenu = new FlowLayoutPanel();
+            panelMasterSubmenu.FlowDirection = FlowDirection.TopDown;
+            panelMasterSubmenu.WrapContents = false;
+            panelMasterSubmenu.AutoSize = true;
+            panelMasterSubmenu.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            panelMasterSubmenu.Margin = new Padding(0);
+            panelMasterSubmenu.Padding = new Padding(0);
+            panelMasterSubmenu.BackColor = Color.Transparent;
+            panelMasterSubmenu.Visible = false;
+
+            int subBtnHeight = 36;
+            btnSubProducts = CreateSubNavButton("      📦  Product Master", subBtnHeight);
+            btnSubProducts.Click += (s, e) => OpenMasterEntry("Product");
+            panelMasterSubmenu.Controls.Add(btnSubProducts);
+
+            btnSubCategory = CreateSubNavButton("      📂  Category Master", subBtnHeight);
+            btnSubCategory.Click += (s, e) => OpenMasterEntry("Category");
+            panelMasterSubmenu.Controls.Add(btnSubCategory);
+
+            btnSubCustomers = CreateSubNavButton("      👥  Customer Master", subBtnHeight);
+            btnSubCustomers.Click += (s, e) => OpenMasterEntry("Customer");
+            panelMasterSubmenu.Controls.Add(btnSubCustomers);
+
+            btnSubSuppliers = CreateSubNavButton("      🏢  Supplier Master", subBtnHeight);
+            btnSubSuppliers.Click += (s, e) => OpenMasterEntry("Supplier");
+            panelMasterSubmenu.Controls.Add(btnSubSuppliers);
+
+            btnSubUsers = CreateSubNavButton("      👤  User Master", subBtnHeight);
+            btnSubUsers.Click += (s, e) => OpenMasterEntry("User");
+            panelMasterSubmenu.Controls.Add(btnSubUsers);
+
+            sidebarMenuPanel.Controls.Add(panelMasterSubmenu);
 
             btnPurchases = CreateNavButton("  📥   Purchase Entry", btnHeight);
             btnPurchases.Click += (s, e) => ShowView(new PurchaseControl(), btnPurchases, "New Purchase / Goods Receipt");
@@ -172,14 +211,6 @@ namespace MeroDokan
             btnSettlement.Click += (s, e) => ShowView(new DailySettlementControl(), btnSettlement, "Daily Cash Register & Settlement");
             sidebarMenuPanel.Controls.Add(btnSettlement);
 
-            btnCustomers = CreateNavButton("  👥   Customer Directory", btnHeight);
-            btnCustomers.Click += (s, e) => ShowView(new CustomerControl(), btnCustomers, "Customer Directory & CRM");
-            sidebarMenuPanel.Controls.Add(btnCustomers);
-
-            btnSuppliers = CreateNavButton("  🏢   Supplier Directory", btnHeight);
-            btnSuppliers.Click += (s, e) => ShowView(new SupplierControl(), btnSuppliers, "Supplier & Vendor Directory");
-            sidebarMenuPanel.Controls.Add(btnSuppliers);
-
             btnReports = CreateNavButton("  📉   Analytical Reports", btnHeight);
             btnReports.Click += (s, e) => ShowView(new ReportControl(), btnReports, "Reports & Business Intelligence");
             sidebarMenuPanel.Controls.Add(btnReports);
@@ -187,10 +218,6 @@ namespace MeroDokan
             btnBackup = CreateNavButton("  ⚙️   System Backup", btnHeight);
             btnBackup.Click += (s, e) => ShowView(new BackupRestoreControl(), btnBackup, "Database Disaster Recovery & Backup");
             sidebarMenuPanel.Controls.Add(btnBackup);
-
-            btnUserManagement = CreateNavButton("  👥   User Management", btnHeight);
-            btnUserManagement.Click += (s, e) => ShowView(new UserManagementControl(), btnUserManagement, "Employee Access & User Management");
-            sidebarMenuPanel.Controls.Add(btnUserManagement);
 
             btnSettings = CreateNavButton("  ⚙️   Profile & Settings", btnHeight);
             btnSettings.Click += (s, e) => {
@@ -325,6 +352,28 @@ namespace MeroDokan
             mainContentPanel.BringToFront();
         }
 
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            this.WindowState = FormWindowState.Maximized;
+            AdjustChildViewSize();
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            if (this.WindowState != FormWindowState.Maximized)
+            {
+                this.WindowState = FormWindowState.Maximized;
+            }
+            AdjustChildViewSize();
+            if (mainContentPanel != null && mainContentPanel.Controls.Count > 0)
+            {
+                mainContentPanel.Controls[0].PerformLayout();
+                mainContentPanel.Controls[0].Invalidate(true);
+            }
+        }
+
         protected override void OnSizeChanged(EventArgs e)
         {
             base.OnSizeChanged(e);
@@ -358,6 +407,105 @@ namespace MeroDokan
             return btn;
         }
 
+        private Button CreateSubNavButton(string text, int height)
+        {
+            Button btn = new Button();
+            btn.Text = text;
+            btn.Size = new Size(205, height);
+            btn.Margin = new Padding(12, 2, 12, 2);
+            btn.FlatStyle = FlatStyle.Flat;
+            btn.BackColor = Color.Transparent;
+            btn.ForeColor = Theme.TextDark;
+            btn.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            btn.TextAlign = ContentAlignment.MiddleLeft;
+            btn.FlatAppearance.BorderSize = 0;
+            btn.FlatAppearance.MouseOverBackColor = Theme.Secondary;
+            btn.Cursor = Cursors.Hand;
+            return btn;
+        }
+
+        private void ToggleMasterSubmenu()
+        {
+            isMasterSubmenuExpanded = !isMasterSubmenuExpanded;
+            panelMasterSubmenu.Visible = isMasterSubmenuExpanded;
+            btnMasterEntry.Text = isMasterSubmenuExpanded ? "  📁   Master Entry          ▾" : "  📁   Master Entry          ▸";
+        }
+
+        private void SetMasterSubmenuExpanded(bool expanded)
+        {
+            isMasterSubmenuExpanded = expanded;
+            panelMasterSubmenu.Visible = expanded;
+            btnMasterEntry.Text = expanded ? "  📁   Master Entry          ▾" : "  📁   Master Entry          ▸";
+        }
+
+        private void OpenMasterEntry(string tabKey)
+        {
+            if (masterEntryView == null)
+            {
+                masterEntryView = new MasterEntryControl(tabKey);
+                masterEntryView.OnTabChanged += (activeTab) =>
+                {
+                    HighlightMasterSubButton(activeTab);
+                    lblHeaderTitle.Text = GetMasterEntryTitle(activeTab);
+                };
+            }
+            else
+            {
+                masterEntryView.SelectTab(tabKey);
+            }
+
+            ShowView(masterEntryView, btnMasterEntry, GetMasterEntryTitle(tabKey));
+            HighlightMasterSubButton(tabKey);
+        }
+
+        private void HighlightMasterSubButton(string tabKey)
+        {
+            Button[] subButtons = { btnSubProducts, btnSubCategory, btnSubCustomers, btnSubSuppliers, btnSubUsers };
+            foreach (var b in subButtons)
+            {
+                if (b == null) continue;
+                b.BackColor = Color.Transparent;
+                b.ForeColor = Theme.TextDark;
+                b.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            }
+
+            Button target = null;
+            if (tabKey.IndexOf("Category", StringComparison.OrdinalIgnoreCase) >= 0) target = btnSubCategory;
+            else if (tabKey.IndexOf("Customer", StringComparison.OrdinalIgnoreCase) >= 0) target = btnSubCustomers;
+            else if (tabKey.IndexOf("Supplier", StringComparison.OrdinalIgnoreCase) >= 0) target = btnSubSuppliers;
+            else if (tabKey.IndexOf("User", StringComparison.OrdinalIgnoreCase) >= 0) target = btnSubUsers;
+            else target = btnSubProducts;
+
+            if (target != null)
+            {
+                target.BackColor = Color.FromArgb(40, 52, 75);
+                target.ForeColor = Theme.TextLight;
+                target.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            }
+        }
+
+        private void ClearMasterSubButtonHighlights()
+        {
+            Button[] subButtons = { btnSubProducts, btnSubCategory, btnSubCustomers, btnSubSuppliers, btnSubUsers };
+            foreach (var b in subButtons)
+            {
+                if (b == null) continue;
+                b.BackColor = Color.Transparent;
+                b.ForeColor = Theme.TextDark;
+                b.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            }
+        }
+
+        private string GetMasterEntryTitle(string tabKey)
+        {
+            if (string.IsNullOrEmpty(tabKey)) return "Master Entry Catalog";
+            if (tabKey.IndexOf("Category", StringComparison.OrdinalIgnoreCase) >= 0) return "Master Entry - Category Catalog";
+            if (tabKey.IndexOf("Customer", StringComparison.OrdinalIgnoreCase) >= 0) return "Master Entry - Customer Directory";
+            if (tabKey.IndexOf("Supplier", StringComparison.OrdinalIgnoreCase) >= 0) return "Master Entry - Supplier Directory";
+            if (tabKey.IndexOf("User", StringComparison.OrdinalIgnoreCase) >= 0) return "Master Entry - Employee & User Access";
+            return "Master Entry - Product Catalog";
+        }
+
         private void AdjustChildViewSize()
         {
             if (mainContentPanel != null && mainContentPanel.Controls.Count > 0)
@@ -371,21 +519,32 @@ namespace MeroDokan
                 
                 child.Location = new Point(mainContentPanel.Padding.Left, mainContentPanel.Padding.Top);
                 child.Size = new Size(w, h);
+                child.PerformLayout();
             }
         }
 
         private void ShowView(UserControl view, Button activeBtn, string headerTitle)
         {
             // Update Active State Visuals on Sidebar Buttons
-            Button[] navButtons = { btnDashboard, btnCategory, btnProducts, btnStock, btnStockLedger, btnPurchases, btnSales, btnSalesReturn, btnSettlement, btnCustomers, btnSuppliers, btnReports, btnBackup, btnUserManagement, btnSettings };
+            Button[] navButtons = { btnDashboard, btnMasterEntry, btnStock, btnStockLedger, btnPurchases, btnSales, btnSalesReturn, btnSettlement, btnReports, btnBackup, btnSettings };
             foreach (var b in navButtons)
             {
+                if (b == null) continue;
                 b.BackColor = Color.Transparent;
                 b.FlatAppearance.MouseOverBackColor = Theme.Secondary;
             }
 
-            activeBtn.BackColor = Theme.Accent;
-            activeBtn.FlatAppearance.MouseOverBackColor = Theme.AccentHover;
+            if (activeBtn != null)
+            {
+                activeBtn.BackColor = Theme.Accent;
+                activeBtn.FlatAppearance.MouseOverBackColor = Theme.AccentHover;
+            }
+
+            if (activeBtn != btnMasterEntry && !(view is MasterEntryControl))
+            {
+                ClearMasterSubButtonHighlights();
+                SetMasterSubmenuExpanded(false);
+            }
 
             // Swap out current Control inside Main Panel
             mainContentPanel.Controls.Clear();
@@ -435,7 +594,7 @@ namespace MeroDokan
             if (lblSubtitle != null) lblSubtitle.ForeColor = Theme.TextDark;
 
             // Redraw navigation buttons
-            Button[] navButtons = { btnDashboard, btnCategory, btnProducts, btnStock, btnStockLedger, btnPurchases, btnSales, btnSalesReturn, btnSettlement, btnCustomers, btnSuppliers, btnReports, btnBackup, btnUserManagement, btnSettings };
+            Button[] navButtons = { btnDashboard, btnMasterEntry, btnStock, btnStockLedger, btnPurchases, btnSales, btnSalesReturn, btnSettlement, btnReports, btnBackup, btnSettings };
             foreach (var b in navButtons)
             {
                 if (b == null) continue;
@@ -446,6 +605,21 @@ namespace MeroDokan
                     b.BackColor = Theme.Accent;
                     b.FlatAppearance.MouseOverBackColor = Theme.AccentHover;
                 }
+            }
+
+            Button[] subButtons = { btnSubProducts, btnSubCategory, btnSubCustomers, btnSubSuppliers, btnSubUsers };
+            foreach (var sb in subButtons)
+            {
+                if (sb == null) continue;
+                if (sb.BackColor == Color.Transparent)
+                {
+                    sb.ForeColor = Theme.TextDark;
+                }
+                else
+                {
+                    sb.ForeColor = Theme.TextLight;
+                }
+                sb.FlatAppearance.MouseOverBackColor = Theme.Secondary;
             }
             
             // Reload user session text dynamically from profile details
@@ -561,8 +735,12 @@ namespace MeroDokan
                 lblLogoText.Text = shopName;
             }
 
-            // Load logo image or fallback to drawing a premium placeholder
-            if (!string.IsNullOrEmpty(logoPath) && File.Exists(logoPath))
+            // Load logo image or fallback to app logo icon
+            string defaultLogo = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon_512.png");
+            if (!File.Exists(defaultLogo)) defaultLogo = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logo.png");
+            string targetLogoPath = (!string.IsNullOrEmpty(logoPath) && File.Exists(logoPath)) ? logoPath : (File.Exists(defaultLogo) ? defaultLogo : "");
+
+            if (!string.IsNullOrEmpty(targetLogoPath) && File.Exists(targetLogoPath))
             {
                 try
                 {
@@ -573,7 +751,7 @@ namespace MeroDokan
                         picSidebarLogo.Image = null;
                     }
 
-                    byte[] bytes = File.ReadAllBytes(logoPath);
+                    byte[] bytes = File.ReadAllBytes(targetLogoPath);
                     using (var ms = new System.IO.MemoryStream(bytes))
                     {
                         picSidebarLogo.Image = Image.FromStream(ms);
@@ -621,7 +799,7 @@ namespace MeroDokan
             bool isAdmin = string.Equals(Session.Role, "Admin", StringComparison.OrdinalIgnoreCase);
             bool isEmployee = string.Equals(Session.Role, "Employee", StringComparison.OrdinalIgnoreCase);
 
-            if (btnUserManagement != null) btnUserManagement.Visible = isAdmin;
+            if (btnSubUsers != null) btnSubUsers.Visible = isAdmin;
             if (btnReports != null) btnReports.Visible = isAdmin || isEmployee;
             if (btnBackup != null) btnBackup.Visible = isAdmin || isEmployee;
             if (btnSettings != null) btnSettings.Visible = isAdmin;

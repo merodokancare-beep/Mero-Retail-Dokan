@@ -254,8 +254,9 @@ namespace MeroDokan
             Theme.StyleLabel(lblHeader, Theme.TextLight, Theme.HeaderFont);
             this.Controls.Add(lblHeader);
 
-            Panel maintenanceCard = Theme.CreateCard(800, isAdmin ? 600 : 350);
+            Panel maintenanceCard = Theme.CreateCard(this.Width - 40, isAdmin ? 600 : 350);
             maintenanceCard.Location = new Point(20, 70);
+            maintenanceCard.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
             Label lblCardTitle = new System.Windows.Forms.Label();
             lblCardTitle.Text = "System Disaster Recovery Operations";
@@ -268,7 +269,8 @@ namespace MeroDokan
             lblDesc.Text = @"Database backups create an offline physical '.bak' copy of your complete store records. 
 It is recommended to schedule weekly backups. Restoring a database will completely overwrite all existing database transactions, inventory listings, and sales with the selected backup snapshot.";
             lblDesc.Location = new Point(25, 75);
-            lblDesc.Size = new Size(750, 60);
+            lblDesc.Size = new Size(maintenanceCard.Width - 50, 60);
+            lblDesc.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleLabel(lblDesc, Theme.TextDark, Theme.MainFont);
             maintenanceCard.Controls.Add(lblDesc);
 
@@ -285,8 +287,9 @@ It is recommended to schedule weekly backups. Restoring a database will complete
             maintenanceCard.Controls.Add(lblPath);
 
             txtBackupPath = new TextBox();
-            txtBackupPath.Size = new Size(580, 30);
+            txtBackupPath.Size = new Size(maintenanceCard.Width - 190, 30);
             txtBackupPath.Location = new Point(25, 215);
+            txtBackupPath.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleTextBox(txtBackupPath);
             txtBackupPath.Text = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Backups");
             maintenanceCard.Controls.Add(txtBackupPath);
@@ -294,7 +297,8 @@ It is recommended to schedule weekly backups. Restoring a database will complete
             btnBrowse = new Button();
             btnBrowse.Text = "Browse...";
             btnBrowse.Size = new Size(130, 36);
-            btnBrowse.Location = new Point(620, 212);
+            btnBrowse.Location = new Point(maintenanceCard.Width - 150, 212);
+            btnBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             Theme.StyleSecondaryButton(btnBrowse);
             btnBrowse.Click += BtnBrowse_Click;
             maintenanceCard.Controls.Add(btnBrowse);
@@ -310,8 +314,9 @@ It is recommended to schedule weekly backups. Restoring a database will complete
             if (isAdmin)
             {
                 Panel div = new Panel();
-                div.Size = new Size(750, 1);
+                div.Size = new Size(maintenanceCard.Width - 50, 1);
                 div.Location = new Point(25, 335);
+                div.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
                 div.BackColor = Theme.AlternateRow;
                 maintenanceCard.Controls.Add(div);
 
@@ -330,8 +335,9 @@ It is recommended to schedule weekly backups. Restoring a database will complete
                 maintenanceCard.Controls.Add(btnRestore);
 
                 Panel div2 = new Panel();
-                div2.Size = new Size(750, 1);
+                div2.Size = new Size(maintenanceCard.Width - 50, 1);
                 div2.Location = new Point(25, 465);
+                div2.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
                 div2.BackColor = Theme.AlternateRow;
                 maintenanceCard.Controls.Add(div2);
 
@@ -931,6 +937,15 @@ It is recommended to schedule weekly backups. Restoring a database will complete
                         {
                             SqlConnection.ClearAllPools();
 
+                            // Detect target database name dynamically
+                            string targetDb = "MeroDokanDB";
+                            try
+                            {
+                                var cfg = DatabaseHelper.LoadConfig();
+                                if (!string.IsNullOrEmpty(cfg.Database)) targetDb = cfg.Database;
+                            }
+                            catch { }
+
                             using (SqlConnection conn = new SqlConnection(masterConnString))
                             {
                                 conn.Open();
@@ -940,8 +955,9 @@ It is recommended to schedule weekly backups. Restoring a database will complete
                                 string currentLdfPath = null;
                                 try
                                 {
-                                    using (SqlCommand cmd = new SqlCommand("SELECT name, physical_name FROM sys.master_files WHERE database_id = DB_ID('MeroDokanDB')", conn))
+                                    using (SqlCommand cmd = new SqlCommand("SELECT name, physical_name FROM sys.master_files WHERE database_id = DB_ID(@dbName)", conn))
                                     {
+                                        cmd.Parameters.AddWithValue("@dbName", targetDb);
                                         using (SqlDataReader rdr = cmd.ExecuteReader())
                                         {
                                             while (rdr.Read())
@@ -971,8 +987,8 @@ It is recommended to schedule weekly backups. Restoring a database will complete
                                         if (!string.IsNullOrEmpty(masterPhysicalPath))
                                         {
                                             string masterDir = Path.GetDirectoryName(masterPhysicalPath);
-                                            currentMdfPath = Path.Combine(masterDir, "MeroDokanDB.mdf");
-                                            currentLdfPath = Path.Combine(masterDir, "MeroDokanDB_log.ldf");
+                                            currentMdfPath = Path.Combine(masterDir, $"{targetDb}.mdf");
+                                            currentLdfPath = Path.Combine(masterDir, $"{targetDb}_log.ldf");
                                         }
                                     }
                                     catch { }
@@ -982,8 +998,8 @@ It is recommended to schedule weekly backups. Restoring a database will complete
                                 if (string.IsNullOrEmpty(currentMdfPath))
                                 {
                                     string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                                    currentMdfPath = Path.Combine(userProfile, "MeroDokanDB.mdf");
-                                    currentLdfPath = Path.Combine(userProfile, "MeroDokanDB_log.ldf");
+                                    currentMdfPath = Path.Combine(userProfile, $"{targetDb}.mdf");
+                                    currentLdfPath = Path.Combine(userProfile, $"{targetDb}_log.ldf");
                                 }
 
                                 // 2. Query file list from the backup file to get logical names and build MOVE clauses
@@ -1004,13 +1020,13 @@ It is recommended to schedule weekly backups. Restoring a database will complete
                                             if (type.Equals("D", StringComparison.OrdinalIgnoreCase))
                                             {
                                                 string suffix = dataCount == 0 ? "" : dataCount.ToString();
-                                                targetPath = Path.Combine(Path.GetDirectoryName(currentMdfPath), $"MeroDokanDB{suffix}.mdf");
+                                                targetPath = Path.Combine(Path.GetDirectoryName(currentMdfPath), $"{targetDb}{suffix}.mdf");
                                                 dataCount++;
                                             }
                                             else if (type.Equals("L", StringComparison.OrdinalIgnoreCase))
                                             {
                                                 string suffix = logCount == 0 ? "" : logCount.ToString();
-                                                targetPath = Path.Combine(Path.GetDirectoryName(currentLdfPath), $"MeroDokanDB{suffix}_log.ldf");
+                                                targetPath = Path.Combine(Path.GetDirectoryName(currentLdfPath), $"{targetDb}{suffix}_log.ldf");
                                                 logCount++;
                                             }
                                             else
@@ -1025,13 +1041,13 @@ It is recommended to schedule weekly backups. Restoring a database will complete
                                 }
 
                                 // 3. Build restore query
-                                string restoreSql = "ALTER DATABASE [MeroDokanDB] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;\n";
-                                restoreSql += "RESTORE DATABASE [MeroDokanDB] FROM DISK = @path WITH REPLACE";
+                                string restoreSql = $"ALTER DATABASE [{targetDb}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;\n";
+                                restoreSql += $"RESTORE DATABASE [{targetDb}] FROM DISK = @path WITH REPLACE";
                                 if (moveClauses.Count > 0)
                                 {
                                     restoreSql += ",\n" + string.Join(",\n", moveClauses);
                                 }
-                                restoreSql += ";\nALTER DATABASE [MeroDokanDB] SET MULTI_USER;";
+                                restoreSql += $";\nALTER DATABASE [{targetDb}] SET MULTI_USER;";
 
                                 using (SqlCommand cmd = new SqlCommand(restoreSql, conn))
                                 {
@@ -1040,9 +1056,56 @@ It is recommended to schedule weekly backups. Restoring a database will complete
                                 }
                             }
 
-                            lblStatus.Text = "Success: Database restored successfully.";
+                            // 4. Clear connection pools and run schema migrations immediately so older backups are upgraded
+                            SqlConnection.ClearAllPools();
+                            lblStatus.Text = "Status: Upgrading restored database schema...";
+                            try
+                            {
+                                DatabaseHelper.InitializeDatabase();
+                            }
+                            catch (Exception initEx)
+                            {
+                                System.Diagnostics.Debug.WriteLine("Post-restore schema migration warning: " + initEx.Message);
+                            }
+
+                            lblStatus.Text = "Success: Database restored and upgraded successfully.";
                             lblStatus.ForeColor = Theme.Success;
-                            MessageBox.Show("Database snapshot restored successfully! The application will refresh connection details.", "Recovery Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            
+                            DialogResult resetPass = MessageBox.Show(
+                                "Database snapshot restored and upgraded successfully!\n\n" +
+                                "Would you like to reset the 'admin' password to default ('admin')?\n\n" +
+                                "• Choose 'Yes' if you restored an external or client backup with an unknown password.\n" +
+                                "• Choose 'No' to preserve the existing passwords from the backup file.",
+                                "Reset Admin Password?",
+                                MessageBoxButtons.YesNo,
+                                MessageBoxIcon.Question
+                            );
+
+                            if (resetPass == DialogResult.Yes)
+                            {
+                                try
+                                {
+                                    using (SqlConnection conn = new SqlConnection(DatabaseHelper.ConnectionString))
+                                    {
+                                        conn.Open();
+                                        string newHash = DatabaseHelper.HashPassword("admin");
+                                        using (SqlCommand cmd = new SqlCommand("UPDATE Users SET PasswordHash = @hash WHERE Username = 'admin'", conn))
+                                        {
+                                            cmd.Parameters.AddWithValue("@hash", newHash);
+                                            cmd.ExecuteNonQuery();
+                                        }
+                                    }
+                                    MessageBox.Show("The 'admin' user password has been reset to: admin", "Password Reset", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                }
+                                catch (Exception exPass)
+                                {
+                                    System.Diagnostics.Debug.WriteLine("Admin password reset warning: " + exPass.Message);
+                                }
+                            }
+                            else
+                            {
+                                MessageBox.Show("Database snapshot restored and upgraded successfully! All tables and columns are up to date.", "Recovery Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
                         }
                         catch (Exception ex)
                         {

@@ -19,10 +19,24 @@ namespace MeroDokan
         private DataGridView gridCart;
 
         private Label lblSubTotal;
+        private ComboBox comboDiscountType;
         private TextBox txtDiscount;
+        private Label lblDiscountAmount;
+        private Label lblTaxableValue;
         private TextBox txtTax;
+        private Label lblTaxAmount;
         private Label lblGrandTotal;
-        private ComboBox comboPaymentMethod;
+
+        // Payment Mode State & Buttons
+        private string selectedPaymentMethod = "Cash";
+        private Button btnPayCash;
+        private Button btnPayUPI;
+        private Button btnPayCard;
+        private Button btnPaySplit;
+        private decimal splitCashAmount = 0;
+        private decimal splitOnlineAmount = 0;
+
+        private Panel checkoutPanel;
         private TextBox txtAmountPaid;
         private Label lblDueAmount;
         private CheckBox chkBillNotRequired;
@@ -41,6 +55,7 @@ namespace MeroDokan
         private DataTable cartTable;
         private decimal subTotal = 0;
         private decimal discount = 0;
+        private decimal taxableValue = 0;
         private decimal tax = 0;
         private decimal grandTotal = 0;
         private int currentSelectedStock = 0;
@@ -167,18 +182,18 @@ namespace MeroDokan
 
             // RIGHT PANEL: Cart Grid & Complex Live Calculator
             gridCart = new DataGridView();
-            gridCart.Size = new Size(530, 280);
+            gridCart.Size = new Size(530, 215);
             gridCart.Location = new Point(400, 65);
             gridCart.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
             Theme.StyleGrid(gridCart);
             this.Controls.Add(gridCart);
 
-            // Remove item button
+            // Action buttons bar
             btnRemoveItem = new Button();
-            btnRemoveItem.Text = "❌ Remove Item"; // Cleaner and fits perfectly in Large Font
-            btnRemoveItem.Size = new Size(200, 40); // Expanded width and height to prevent text clipping
-            btnRemoveItem.Location = new Point(400, 350); // Adjusted Y coordinate from 380 to 350
-            btnRemoveItem.UseCompatibleTextRendering = true; // Force high-DPI text rendering compatibility
+            btnRemoveItem.Text = "❌ Remove Item";
+            btnRemoveItem.Size = new Size(160, 34);
+            btnRemoveItem.Location = new Point(400, 286);
+            btnRemoveItem.UseCompatibleTextRendering = true;
             btnRemoveItem.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             Theme.StyleDangerButton(btnRemoveItem);
             btnRemoveItem.Click += BtnRemoveItem_Click;
@@ -186,8 +201,8 @@ namespace MeroDokan
 
             btnHold = new Button();
             btnHold.Text = "⏸️ Hold Cart";
-            btnHold.Size = new Size(150, 40);
-            btnHold.Location = new Point(610, 350); // Adjusted Y coordinate from 380 to 350
+            btnHold.Size = new Size(130, 34);
+            btnHold.Location = new Point(570, 286);
             btnHold.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             Theme.StyleSecondaryButton(btnHold);
             btnHold.Click += BtnHold_Click;
@@ -195,156 +210,246 @@ namespace MeroDokan
 
             btnRecall = new Button();
             btnRecall.Text = "📂 Recall Cart";
-            btnRecall.Size = new Size(160, 40);
-            btnRecall.Location = new Point(770, 350); // Adjusted Y coordinate from 380 to 350
+            btnRecall.Size = new Size(140, 34);
+            btnRecall.Location = new Point(710, 286);
             btnRecall.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             Theme.StyleSecondaryButton(btnRecall);
             btnRecall.Click += BtnRecall_Click;
             this.Controls.Add(btnRecall);
 
-            // Complex live checkout panel
-            Panel checkoutPanel = Theme.CreateCard(530, 230); // Expanded height from 195 to 230
-            checkoutPanel.Location = new Point(400, 395); // Shuffled up from 425 to 395
-            checkoutPanel.BackColor = Color.FromArgb(17, 24, 39);
+            // Modern POS Billing Checkout Panel
+            checkoutPanel = Theme.CreateCard(530, 268);
+            checkoutPanel.Location = new Point(400, 340);
+            checkoutPanel.BackColor = Color.FromArgb(11, 19, 43); // Sleek deep navy card
             checkoutPanel.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
 
-            // SubTotal
+            // 1. Sub Total
             Label lblSub = new Label();
-            lblSub.Text = "SubTotal:";
-            lblSub.Location = new Point(15, 15);
-            Theme.StyleLabel(lblSub, Theme.TextDark, Theme.BoldFont);
+            lblSub.Text = "Sub Total";
+            lblSub.Location = new Point(20, 10);
+            lblSub.AutoSize = true;
+            Theme.StyleLabel(lblSub, Color.FromArgb(156, 163, 175), new Font("Segoe UI Semibold", 9.5F));
             checkoutPanel.Controls.Add(lblSub);
 
             lblSubTotal = new Label();
             lblSubTotal.Text = "Rs. 0.00";
-            lblSubTotal.Location = new Point(150, 15); // Shifted from 120 to 150 to prevent overlap
             lblSubTotal.AutoSize = true;
-            Theme.StyleLabel(lblSubTotal, Theme.TextLight, Theme.BoldFont);
+            Theme.StyleLabel(lblSubTotal, Color.White, new Font("Segoe UI", 10.5F, FontStyle.Bold));
             checkoutPanel.Controls.Add(lblSubTotal);
 
-            // Discount Input
+            // 2. Discount: Dropdown (Rs. default) & Numeric Input
             Label lblDisc = new Label();
-            lblDisc.Text = "Discount (Rs.):";
-            lblDisc.Location = new Point(15, 50);
-            Theme.StyleLabel(lblDisc, Theme.TextDark, Theme.BoldFont);
+            lblDisc.Text = "Discount";
+            lblDisc.Location = new Point(20, 36);
+            lblDisc.AutoSize = true;
+            Theme.StyleLabel(lblDisc, Color.FromArgb(156, 163, 175), new Font("Segoe UI Semibold", 9.5F));
             checkoutPanel.Controls.Add(lblDisc);
 
+            Panel pnlComboDisc = new Panel();
+            pnlComboDisc.Location = new Point(100, 32);
+            pnlComboDisc.Size = new Size(58, 26);
+            pnlComboDisc.BackColor = Color.FromArgb(55, 65, 81);
+            pnlComboDisc.Padding = new Padding(1);
+
+            comboDiscountType = new ComboBox();
+            comboDiscountType.Dock = DockStyle.Fill;
+            comboDiscountType.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboDiscountType.DrawMode = DrawMode.OwnerDrawFixed;
+            comboDiscountType.ItemHeight = 20;
+            comboDiscountType.FlatStyle = FlatStyle.Flat;
+            comboDiscountType.BackColor = Color.FromArgb(17, 24, 39);
+            comboDiscountType.ForeColor = Color.White;
+            comboDiscountType.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            comboDiscountType.Items.AddRange(new string[] { "Rs.", "%" });
+            comboDiscountType.SelectedIndex = 0; // Default selected: Rs.
+            comboDiscountType.DrawItem += (s, e) =>
+            {
+                if (e.Index < 0) return;
+                Graphics g = e.Graphics;
+                bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+                Color bg = isSelected ? Color.FromArgb(37, 99, 235) : Color.FromArgb(17, 24, 39);
+                using (SolidBrush b = new SolidBrush(bg))
+                {
+                    g.FillRectangle(b, e.Bounds);
+                }
+                string val = comboDiscountType.Items[e.Index].ToString();
+                TextRenderer.DrawText(g, val, new Font("Segoe UI", 9F, FontStyle.Bold), e.Bounds, Color.White, TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter);
+            };
+            comboDiscountType.SelectedIndexChanged += (s, e) => CalculatorInput_Changed(s, e);
+            pnlComboDisc.Controls.Add(comboDiscountType);
+            checkoutPanel.Controls.Add(pnlComboDisc);
+
             txtDiscount = new TextBox();
-            txtDiscount.Size = new Size(90, 24); // Slightly reduced width to fit beautifully
-            txtDiscount.Location = new Point(150, 47); // Shifted from 120 to 150
-            Theme.StyleTextBox(txtDiscount);
-            txtDiscount.Text = "0.00";
+            txtDiscount.Location = new Point(164, 32);
+            txtDiscount.Size = new Size(62, 26);
+            txtDiscount.Text = "0";
+            txtDiscount.TextAlign = HorizontalAlignment.Center;
+            txtDiscount.BackColor = Color.FromArgb(17, 24, 39);
+            txtDiscount.ForeColor = Color.White;
+            txtDiscount.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+            txtDiscount.BorderStyle = BorderStyle.FixedSingle;
             txtDiscount.TextChanged += CalculatorInput_Changed;
             checkoutPanel.Controls.Add(txtDiscount);
 
-            // Tax (SGST & IGST %) Input
+            lblDiscountAmount = new Label();
+            lblDiscountAmount.Text = "- Rs. 0.00";
+            lblDiscountAmount.AutoSize = true;
+            Theme.StyleLabel(lblDiscountAmount, Color.FromArgb(16, 185, 129), new Font("Segoe UI", 10.5F, FontStyle.Bold));
+            checkoutPanel.Controls.Add(lblDiscountAmount);
+
+            // 3. Taxable Value
+            Label lblTaxable = new Label();
+            lblTaxable.Text = "Taxable Value";
+            lblTaxable.Location = new Point(20, 60);
+            lblTaxable.AutoSize = true;
+            Theme.StyleLabel(lblTaxable, Color.FromArgb(156, 163, 175), new Font("Segoe UI Semibold", 9.5F));
+            checkoutPanel.Controls.Add(lblTaxable);
+
+            lblTaxableValue = new Label();
+            lblTaxableValue.Text = "Rs. 0.00";
+            lblTaxableValue.AutoSize = true;
+            Theme.StyleLabel(lblTaxableValue, Color.White, new Font("Segoe UI", 10.5F, FontStyle.Bold));
+            checkoutPanel.Controls.Add(lblTaxableValue);
+
+            // 4. IGST Tax
             Label lblTx = new Label();
-            lblTx.Text = "SGST & IGST (%):";
-            lblTx.Location = new Point(15, 85);
-            Theme.StyleLabel(lblTx, Theme.TextDark, Theme.BoldFont);
+            lblTx.Text = "IGST Tax";
+            lblTx.Location = new Point(20, 84);
+            lblTx.AutoSize = true;
+            Theme.StyleLabel(lblTx, Color.FromArgb(156, 163, 175), new Font("Segoe UI Semibold", 9.5F));
             checkoutPanel.Controls.Add(lblTx);
 
             txtTax = new TextBox();
-            txtTax.Size = new Size(90, 24); // Adjusted width
-            txtTax.Location = new Point(150, 82); // Shifted from 120 to 150
-            Theme.StyleTextBox(txtTax);
+            txtTax.Location = new Point(100, 80);
+            txtTax.Size = new Size(46, 24);
             txtTax.Text = "0";
+            txtTax.TextAlign = HorizontalAlignment.Center;
+            txtTax.BackColor = Color.FromArgb(17, 24, 39);
+            txtTax.ForeColor = Color.White;
+            txtTax.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+            txtTax.BorderStyle = BorderStyle.FixedSingle;
             txtTax.TextChanged += CalculatorInput_Changed;
             checkoutPanel.Controls.Add(txtTax);
 
-            // Payment Method
-            Label lblPay = new Label();
-            lblPay.Text = "Payment Mode:";
-            lblPay.Location = new Point(15, 120);
-            Theme.StyleLabel(lblPay, Theme.TextDark, Theme.BoldFont);
-            checkoutPanel.Controls.Add(lblPay);
+            Label lblPct = new Label();
+            lblPct.Text = "%";
+            lblPct.Location = new Point(152, 83);
+            lblPct.AutoSize = true;
+            Theme.StyleLabel(lblPct, Color.FromArgb(156, 163, 175), Theme.BoldFont);
+            checkoutPanel.Controls.Add(lblPct);
 
-            comboPaymentMethod = new ComboBox();
-            comboPaymentMethod.Size = new Size(90, 28); // Adjusted width
-            comboPaymentMethod.Location = new Point(150, 117); // Shifted from 120 to 150
-            comboPaymentMethod.DropDownStyle = ComboBoxStyle.DropDownList;
-            comboPaymentMethod.Items.AddRange(new string[] { "Cash", "Card", "QR Pay" });
-            comboPaymentMethod.SelectedIndex = 0;
-            comboPaymentMethod.BackColor = Theme.Primary;
-            comboPaymentMethod.ForeColor = Theme.TextLight;
-            comboPaymentMethod.Font = Theme.MainFont;
-            checkoutPanel.Controls.Add(comboPaymentMethod);
+            lblTaxAmount = new Label();
+            lblTaxAmount.Text = "Rs. 0.00";
+            lblTaxAmount.AutoSize = true;
+            Theme.StyleLabel(lblTaxAmount, Color.FromArgb(245, 158, 11), new Font("Segoe UI", 10.5F, FontStyle.Bold));
+            checkoutPanel.Controls.Add(lblTaxAmount);
 
-            // Amount Paid
-            Label lblAmtPaid = new Label();
-            lblAmtPaid.Text = "Amount Paid (Rs.):";
-            lblAmtPaid.Location = new Point(15, 155);
-            Theme.StyleLabel(lblAmtPaid, Theme.TextDark, Theme.BoldFont);
-            checkoutPanel.Controls.Add(lblAmtPaid);
+            // 5. Divider Line
+            Panel divLine = new Panel();
+            divLine.Location = new Point(20, 110);
+            divLine.Height = 1;
+            divLine.BackColor = Color.FromArgb(31, 41, 55);
+            checkoutPanel.Controls.Add(divLine);
 
-            txtAmountPaid = new TextBox();
-            txtAmountPaid.Size = new Size(90, 24);
-            txtAmountPaid.Location = new Point(150, 152);
-            Theme.StyleTextBox(txtAmountPaid);
-            txtAmountPaid.Text = "0.00";
-            txtAmountPaid.TextChanged += TxtAmountPaid_TextChanged;
-            checkoutPanel.Controls.Add(txtAmountPaid);
+            // 6. Total Payable row (with integrated Skip Print checkbox)
+            Label lblTotal = new Label();
+            lblTotal.Text = "Total Payable";
+            lblTotal.Location = new Point(20, 116);
+            lblTotal.AutoSize = true;
+            Theme.StyleLabel(lblTotal, Color.White, new Font("Segoe UI", 13.5F, FontStyle.Bold));
+            checkoutPanel.Controls.Add(lblTotal);
 
-            // Due Amount
-            Label lblDue = new Label();
-            lblDue.Text = "Due Amount:";
-            lblDue.Location = new Point(15, 190);
-            Theme.StyleLabel(lblDue, Theme.TextDark, Theme.BoldFont);
-            checkoutPanel.Controls.Add(lblDue);
-
-            lblDueAmount = new Label();
-            lblDueAmount.Text = "Rs. 0.00";
-            lblDueAmount.Location = new Point(150, 190);
-            lblDueAmount.AutoSize = true;
-            Theme.StyleLabel(lblDueAmount, Theme.Warning, Theme.BoldFont);
-            checkoutPanel.Controls.Add(lblDueAmount);
-
-            // Divider vertical
-            Panel div = new Panel();
-            div.Size = new Size(1, 200); // Expanded from 165 to 200
-            div.Location = new Point(255, 15); // Shifted slightly to center perfectly
-            div.BackColor = Theme.Secondary;
-            checkoutPanel.Controls.Add(div);
-
-            // Grand Total (Big display)
-            Label lblGrand = new Label();
-            lblGrand.Text = "GRAND TOTAL";
-            lblGrand.Location = new Point(270, 15);
-            lblGrand.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            Theme.StyleLabel(lblGrand, Theme.TextDark, new Font("Segoe UI Semibold", 8F, FontStyle.Bold));
-            checkoutPanel.Controls.Add(lblGrand);
+            chkBillNotRequired = new CheckBox();
+            chkBillNotRequired.Text = "Skip Print";
+            chkBillNotRequired.Checked = true; // Default checked per user requirement
+            chkBillNotRequired.ForeColor = Color.FromArgb(226, 232, 240);
+            chkBillNotRequired.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+            chkBillNotRequired.AutoSize = true;
+            chkBillNotRequired.Cursor = Cursors.Hand;
+            chkBillNotRequired.Location = new Point(165, 120);
+            checkoutPanel.Controls.Add(chkBillNotRequired);
 
             lblGrandTotal = new Label();
             lblGrandTotal.Text = "Rs. 0.00";
-            lblGrandTotal.Location = new Point(270, 35);
             lblGrandTotal.AutoSize = true;
-            lblGrandTotal.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            Theme.StyleLabel(lblGrandTotal, Theme.Success, new Font("Segoe UI", 22F, FontStyle.Bold));
+            Theme.StyleLabel(lblGrandTotal, Color.FromArgb(249, 115, 22), new Font("Segoe UI", 17F, FontStyle.Bold));
             checkoutPanel.Controls.Add(lblGrandTotal);
 
-            // Bill Not Required Checkbox
-            chkBillNotRequired = new CheckBox();
-            chkBillNotRequired.Text = "Bill Not Required";
-            chkBillNotRequired.Location = new Point(285, 115);
-            chkBillNotRequired.AutoSize = true;
-            chkBillNotRequired.Checked = true;
-            chkBillNotRequired.ForeColor = Theme.TextLight;
-            chkBillNotRequired.BackColor = Color.Transparent;
-            chkBillNotRequired.Font = Theme.BoldFont;
-            chkBillNotRequired.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            checkoutPanel.Controls.Add(chkBillNotRequired);
+            // 7. Payment Mode Buttons (Cash, UPI, Card, Split)
+            btnPayCash = CreatePaymentModeButton("💵  Cash", Color.FromArgb(5, 150, 105), "Cash");
+            btnPayUPI = CreatePaymentModeButton("📱  UPI", Color.FromArgb(139, 92, 246), "UPI");
+            btnPayCard = CreatePaymentModeButton("💳  Card", Color.FromArgb(14, 165, 233), "Card");
+            btnPaySplit = CreatePaymentModeButton("🔀  Split", Color.FromArgb(249, 115, 22), "Split");
 
-            // Checkout Button
+            checkoutPanel.Controls.Add(btnPayCash);
+            checkoutPanel.Controls.Add(btnPayUPI);
+            checkoutPanel.Controls.Add(btnPayCard);
+            checkoutPanel.Controls.Add(btnPaySplit);
+
+            // 8. Action Button: PAY & PRINT (Final bottom element)
             btnCheckout = new Button();
-            btnCheckout.Text = "🖨️ Checkout & Print"; // Mixed-case fits much better under scaling
-            btnCheckout.Size = new Size(245, 55);
-            btnCheckout.Location = new Point(270, 140); // Shifted down from 105 to 140 to balance the taller layout
-            btnCheckout.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            Theme.StylePrimaryButton(btnCheckout);
+            btnCheckout.Text = "🖨️  PAY & PRINT";
+            btnCheckout.FlatStyle = FlatStyle.Flat;
+            btnCheckout.BackColor = Color.FromArgb(249, 115, 22);
+            btnCheckout.ForeColor = Color.White;
+            btnCheckout.Font = new Font("Segoe UI", 13F, FontStyle.Bold);
+            btnCheckout.Cursor = Cursors.Hand;
+            btnCheckout.FlatAppearance.BorderSize = 0;
+            btnCheckout.FlatAppearance.MouseOverBackColor = Color.FromArgb(234, 88, 12);
             btnCheckout.Click += BtnCheckout_Click;
             checkoutPanel.Controls.Add(btnCheckout);
 
+            // Backing controls for customer dues
+            txtAmountPaid = new TextBox();
+            txtAmountPaid.Visible = false;
+            txtAmountPaid.Text = "0.00";
+            checkoutPanel.Controls.Add(txtAmountPaid);
+
+            lblDueAmount = new Label();
+            lblDueAmount.Visible = false;
+            lblDueAmount.Text = "Rs. 0.00";
+            checkoutPanel.Controls.Add(lblDueAmount);
+
+            // Dynamic layout adjustment for checkout panel
+            checkoutPanel.Resize += (s, e) =>
+            {
+                int cardWidth = checkoutPanel.ClientSize.Width;
+                int rightEdge = cardWidth - 25;
+
+                lblSubTotal.Location = new Point(rightEdge - lblSubTotal.Width, 10);
+                lblDiscountAmount.Location = new Point(rightEdge - lblDiscountAmount.Width, 36);
+                lblTaxableValue.Location = new Point(rightEdge - lblTaxableValue.Width, 60);
+                lblTaxAmount.Location = new Point(rightEdge - lblTaxAmount.Width, 84);
+
+                divLine.Location = new Point(20, 110);
+                divLine.Width = Math.Max(100, cardWidth - 40);
+
+                lblGrandTotal.Location = new Point(rightEdge - lblGrandTotal.Width, 112);
+
+                int gap = 8;
+                int totalGap = 3 * gap;
+                int availableBtnWidth = cardWidth - 40 - totalGap;
+                int btnW = Math.Max(55, availableBtnWidth / 4);
+
+                btnPayCash.Location = new Point(20, 150);
+                btnPayCash.Size = new Size(btnW, 46);
+
+                btnPayUPI.Location = new Point(20 + btnW + gap, 150);
+                btnPayUPI.Size = new Size(btnW, 46);
+
+                btnPayCard.Location = new Point(20 + (btnW + gap) * 2, 150);
+                btnPayCard.Size = new Size(btnW, 46);
+
+                int splitW = cardWidth - 20 - (20 + (btnW + gap) * 3);
+                btnPaySplit.Location = new Point(20 + (btnW + gap) * 3, 150);
+                btnPaySplit.Size = new Size(Math.Max(btnW, splitW), 46);
+
+                btnCheckout.Location = new Point(20, 204);
+                btnCheckout.Size = new Size(cardWidth - 40, 50);
+            };
+
             this.Controls.Add(checkoutPanel);
+            AdjustBillingLayout();
 
             // Setup Print Elements
             invoiceDoc = new PrintDocument();
@@ -732,30 +837,146 @@ namespace MeroDokan
             lblDueAmount.Text = $"Rs. {dueAmount:N2}";
         }
 
+        private Button CreatePaymentModeButton(string text, Color baseColor, string methodKey)
+        {
+            Button btn = new Button();
+            btn.Text = text;
+            btn.FlatStyle = FlatStyle.Flat;
+            btn.BackColor = baseColor;
+            btn.ForeColor = Color.White;
+            btn.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
+            btn.Cursor = Cursors.Hand;
+            btn.FlatAppearance.BorderSize = 0;
+            btn.Tag = methodKey;
+
+            btn.Paint += (s, e) =>
+            {
+                if (selectedPaymentMethod == methodKey)
+                {
+                    using (Pen pen = new Pen(Color.White, 3f))
+                    {
+                        Rectangle r = btn.ClientRectangle;
+                        r.Width -= 3;
+                        r.Height -= 3;
+                        r.X += 1;
+                        r.Y += 1;
+                        e.Graphics.DrawRectangle(pen, r);
+                    }
+                }
+            };
+
+            btn.Click += (s, e) => SelectPaymentMethod(methodKey);
+            return btn;
+        }
+
+        private void SelectPaymentMethod(string methodKey)
+        {
+            selectedPaymentMethod = methodKey;
+
+            if (methodKey == "Split")
+            {
+                using (var splitDlg = new SplitPaymentDialog(grandTotal, splitCashAmount, splitOnlineAmount))
+                {
+                    if (splitDlg.ShowDialog(this) == DialogResult.OK)
+                    {
+                        splitCashAmount = splitDlg.CashAmount;
+                        splitOnlineAmount = splitDlg.OnlineAmount;
+                    }
+                    else
+                    {
+                        // Fallback to cash if split canceled
+                        selectedPaymentMethod = "Cash";
+                    }
+                }
+            }
+
+            btnPayCash?.Invalidate();
+            btnPayUPI?.Invalidate();
+            btnPayCard?.Invalidate();
+            btnPaySplit?.Invalidate();
+        }
+
         private void CalculatorInput_Changed(object sender, EventArgs e)
         {
-            decimal.TryParse(txtDiscount.Text.Trim(), out discount);
-            
-            decimal taxPercent = 0;
-            if (decimal.TryParse(txtTax.Text.Trim(), out taxPercent))
+            decimal discountInput = 0;
+            decimal.TryParse(txtDiscount?.Text?.Trim() ?? "0", out discountInput);
+
+            string discType = comboDiscountType?.SelectedItem?.ToString() ?? "Rs.";
+            if (discType == "%")
             {
-                tax = subTotal * (taxPercent / 100m);
+                discount = subTotal * (discountInput / 100m);
             }
             else
             {
-                tax = 0;
+                discount = discountInput;
             }
-            
-            grandTotal = (subTotal - discount) + tax;
+
+            if (discount > subTotal) discount = subTotal;
+            if (discount < 0) discount = 0;
+
+            taxableValue = subTotal - discount;
+            if (taxableValue < 0) taxableValue = 0;
+
+            decimal taxPercent = 0;
+            decimal.TryParse(txtTax?.Text?.Trim() ?? "0", out taxPercent);
+            if (taxPercent < 0) taxPercent = 0;
+
+            tax = taxableValue * (taxPercent / 100m);
+            grandTotal = taxableValue + tax;
             if (grandTotal < 0) grandTotal = 0;
 
-            lblGrandTotal.Text = $"Rs. {grandTotal:N2}";
+            if (lblSubTotal != null) lblSubTotal.Text = $"Rs. {subTotal:N2}";
+            if (lblDiscountAmount != null) lblDiscountAmount.Text = $"- Rs. {discount:N2}";
+            if (lblTaxableValue != null) lblTaxableValue.Text = $"Rs. {taxableValue:N2}";
+            if (lblTaxAmount != null) lblTaxAmount.Text = $"Rs. {tax:N2}";
+            if (lblGrandTotal != null) lblGrandTotal.Text = $"Rs. {grandTotal:N2}";
 
             if (txtAmountPaid != null && !txtAmountPaid.Focused)
             {
                 txtAmountPaid.Text = grandTotal.ToString("0.00");
             }
             RecalculateDue();
+
+            // Dynamic right alignment
+            if (checkoutPanel != null)
+            {
+                int rightEdge = checkoutPanel.ClientSize.Width - 25;
+                if (lblSubTotal != null) lblSubTotal.Location = new Point(rightEdge - lblSubTotal.Width, 10);
+                if (lblDiscountAmount != null) lblDiscountAmount.Location = new Point(rightEdge - lblDiscountAmount.Width, 36);
+                if (lblTaxableValue != null) lblTaxableValue.Location = new Point(rightEdge - lblTaxableValue.Width, 60);
+                if (lblTaxAmount != null) lblTaxAmount.Location = new Point(rightEdge - lblTaxAmount.Width, 84);
+                if (lblGrandTotal != null) lblGrandTotal.Location = new Point(rightEdge - lblGrandTotal.Width, 112);
+            }
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            AdjustBillingLayout();
+        }
+
+        private void AdjustBillingLayout()
+        {
+            if (checkoutPanel == null || gridCart == null) return;
+
+            int rightMargin = 20;
+            int bottomMargin = 12;
+            int cardWidth = Math.Max(480, this.ClientSize.Width - 400 - rightMargin);
+            int checkoutHeight = 268;
+
+            checkoutPanel.Width = cardWidth;
+            checkoutPanel.Height = checkoutHeight;
+            int checkoutTop = Math.Max(260, this.ClientSize.Height - checkoutHeight - bottomMargin);
+            checkoutPanel.Location = new Point(400, checkoutTop);
+
+            int actionBtnY = checkoutPanel.Top - 38;
+            if (btnRemoveItem != null) btnRemoveItem.Location = new Point(400, actionBtnY);
+            if (btnHold != null) btnHold.Location = new Point(570, actionBtnY);
+            if (btnRecall != null) btnRecall.Location = new Point(710, actionBtnY);
+
+            gridCart.Width = cardWidth;
+            int cartHeight = Math.Max(100, actionBtnY - gridCart.Top - 8);
+            gridCart.Height = cartHeight;
         }
 
         private void CalculateCheckoutTotals()
@@ -785,11 +1006,14 @@ namespace MeroDokan
                 return;
             }
 
-            decimal amountPaid = 0;
-            if (!decimal.TryParse(txtAmountPaid.Text.Trim(), out amountPaid) || amountPaid < 0)
+            decimal amountPaid = grandTotal;
+            if (selectedPaymentMethod == "Split")
             {
-                MessageBox.Show("Please enter a valid amount paid.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                amountPaid = splitCashAmount + splitOnlineAmount;
+            }
+            else if (decimal.TryParse(txtAmountPaid?.Text?.Trim() ?? "0", out decimal parsedPaid) && parsedPaid > 0)
+            {
+                amountPaid = parsedPaid;
             }
 
             decimal dueAmount = grandTotal - amountPaid;
@@ -855,7 +1079,27 @@ namespace MeroDokan
             }
 
             int customerId = (int)comboCustomer.SelectedValue;
-            string paymentMode = comboPaymentMethod.SelectedItem?.ToString() ?? "Cash";
+            string paymentMode = selectedPaymentMethod;
+            decimal saleCashAmount = 0;
+            decimal saleOnlineAmount = 0;
+
+            if (selectedPaymentMethod == "Split")
+            {
+                paymentMode = $"Split (Cash: Rs. {splitCashAmount:N2}, Online: Rs. {splitOnlineAmount:N2})";
+                saleCashAmount = splitCashAmount;
+                saleOnlineAmount = splitOnlineAmount;
+            }
+            else if (selectedPaymentMethod == "Cash")
+            {
+                saleCashAmount = amountPaid;
+                saleOnlineAmount = 0;
+            }
+            else
+            {
+                saleCashAmount = 0;
+                saleOnlineAmount = amountPaid;
+            }
+
             string invoiceNumber = $"INV-{DateTime.Now:yyyyMMdd}-{DateTime.Now:HHmmss}";
 
             using (SqlConnection conn = new SqlConnection(DatabaseHelper.ConnectionString))
@@ -868,9 +1112,9 @@ namespace MeroDokan
                     // 1. Insert Sales Header
                     int saleId = 0;
                     string headerSql = @"
-                        INSERT INTO Sales (InvoiceNumber, CustomerId, SaleDate, SubTotal, Discount, Tax, GrandTotal, AmountPaid, DueAmount, PaymentMethod, CreatedBy) 
+                        INSERT INTO Sales (InvoiceNumber, CustomerId, SaleDate, SubTotal, Discount, Tax, GrandTotal, AmountPaid, DueAmount, PaymentMethod, CreatedBy, CashAmount, OnlineAmount) 
                         OUTPUT INSERTED.Id
-                        VALUES (@invNum, @custId, GETDATE(), @sub, @disc, @tax, @grand, @paid, @due, @pay, @user)";
+                        VALUES (@invNum, @custId, GETDATE(), @sub, @disc, @tax, @grand, @paid, @due, @pay, @user, @cashAmt, @onlineAmt)";
 
                     using (SqlCommand cmd = new SqlCommand(headerSql, conn, transaction))
                     {
@@ -884,6 +1128,8 @@ namespace MeroDokan
                         cmd.Parameters.AddWithValue("@due", dueAmount);
                         cmd.Parameters.AddWithValue("@pay", paymentMode);
                         cmd.Parameters.AddWithValue("@user", Session.UserId);
+                        cmd.Parameters.AddWithValue("@cashAmt", saleCashAmount);
+                        cmd.Parameters.AddWithValue("@onlineAmt", saleOnlineAmount);
                         saleId = (int)cmd.ExecuteScalar();
                     }
 
@@ -939,17 +1185,19 @@ namespace MeroDokan
 
                     // Clear Screen & Reset Form state
                     cartTable.Clear();
-                    txtDiscount.Text = "0.00";
+                    txtDiscount.Text = "0";
+                    if (comboDiscountType != null) comboDiscountType.SelectedIndex = 0; // Default Rs.
                     txtTax.Text = "0";
                     txtAmountPaid.Text = "0.00";
+                    chkBillNotRequired.Checked = true; // Default checked
+                    splitCashAmount = 0;
+                    splitOnlineAmount = 0;
+                    selectedPaymentMethod = "Cash";
+                    btnPayCash?.Invalidate();
+                    btnPayUPI?.Invalidate();
+                    btnPayCard?.Invalidate();
+                    btnPaySplit?.Invalidate();
                     CalculateCheckoutTotals();
-                    
-                    // Reset Payment Dropdown to Cash
-                    if (comboPaymentMethod != null && comboPaymentMethod.Items.Count > 0)
-                    {
-                        int cashIdx = comboPaymentMethod.Items.IndexOf("Cash");
-                        comboPaymentMethod.SelectedIndex = cashIdx >= 0 ? cashIdx : 0;
-                    }
 
                     // Reset Customer Dropdown to Walk-in Customer
                     SelectDefaultCustomer();

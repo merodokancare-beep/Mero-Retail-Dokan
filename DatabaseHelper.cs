@@ -707,8 +707,17 @@ namespace MeroDokan
                 {
                     masterConn.Open();
                     bool dbExists = false;
-                    using (SqlCommand cmd = new SqlCommand("SELECT database_id FROM sys.databases WHERE name = 'MeroDokanDB'", masterConn))
+                    string targetDb = "MeroDokanDB";
+                    try
                     {
+                        var cfg = LoadConfig();
+                        if (!string.IsNullOrEmpty(cfg.Database)) targetDb = cfg.Database;
+                    }
+                    catch { }
+
+                    using (SqlCommand cmd = new SqlCommand("SELECT database_id FROM sys.databases WHERE name = @name", masterConn))
+                    {
+                        cmd.Parameters.AddWithValue("@name", targetDb);
                         object result = cmd.ExecuteScalar();
                         if (result != null && result != DBNull.Value)
                         {
@@ -718,7 +727,7 @@ namespace MeroDokan
 
                     if (!dbExists)
                     {
-                        using (SqlCommand cmd = new SqlCommand("CREATE DATABASE MeroDokanDB", masterConn))
+                        using (SqlCommand cmd = new SqlCommand($"CREATE DATABASE [{targetDb}]", masterConn))
                         {
                             cmd.ExecuteNonQuery();
                         }
@@ -843,8 +852,10 @@ namespace MeroDokan
                                 GrandTotal DECIMAL(18,2) NOT NULL DEFAULT 0.00,
                                 AmountPaid DECIMAL(18,2) NOT NULL DEFAULT 0.00,
                                 DueAmount DECIMAL(18,2) NOT NULL DEFAULT 0.00,
-                                PaymentMethod NVARCHAR(50) NOT NULL DEFAULT 'Cash',
-                                CreatedBy INT NULL FOREIGN KEY REFERENCES Users(Id)
+                                PaymentMethod NVARCHAR(100) NOT NULL DEFAULT 'Cash',
+                                CreatedBy INT NULL FOREIGN KEY REFERENCES Users(Id),
+                                CashAmount DECIMAL(18,2) NOT NULL DEFAULT 0.00,
+                                OnlineAmount DECIMAL(18,2) NOT NULL DEFAULT 0.00
                             )
                         END
                         ELSE
@@ -857,7 +868,65 @@ namespace MeroDokan
                             BEGIN
                                 ALTER TABLE Sales ADD DueAmount DECIMAL(18,2) NOT NULL DEFAULT 0.00;
                             END
+                            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Sales') AND name = 'CashAmount')
+                            BEGIN
+                                ALTER TABLE Sales ADD CashAmount DECIMAL(18,2) NOT NULL DEFAULT 0.00;
+                            END
+                            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Sales') AND name = 'OnlineAmount')
+                            BEGIN
+                                ALTER TABLE Sales ADD OnlineAmount DECIMAL(18,2) NOT NULL DEFAULT 0.00;
+                            END
+                            ALTER TABLE Sales ALTER COLUMN PaymentMethod NVARCHAR(100) NOT NULL;
                         END", conn);
+
+                    // Backfill CashAmount and OnlineAmount for existing Sales records if needed
+                    ExecuteNonQuery(@"
+                        UPDATE Sales 
+                        SET CashAmount = AmountPaid, OnlineAmount = 0 
+                        WHERE CashAmount = 0 AND OnlineAmount = 0 AND AmountPaid > 0 AND PaymentMethod = 'Cash';
+
+                        UPDATE Sales 
+                        SET CashAmount = 0, OnlineAmount = AmountPaid 
+                        WHERE CashAmount = 0 AND OnlineAmount = 0 AND AmountPaid > 0 
+                          AND (PaymentMethod IN ('Card', 'QR Pay', 'UPI') OR (PaymentMethod LIKE '%Online%' AND PaymentMethod NOT LIKE 'Split%'));
+                    ", conn);
+
+                    // Parse existing Split records into CashAmount and OnlineAmount
+                    try
+                    {
+                        using (SqlCommand cmdSplit = new SqlCommand("SELECT Id, PaymentMethod FROM Sales WHERE PaymentMethod LIKE 'Split%' AND CashAmount = 0 AND OnlineAmount = 0", conn))
+                        {
+                            using (SqlDataReader rdrSplit = cmdSplit.ExecuteReader())
+                            {
+                                var splits = new System.Collections.Generic.List<Tuple<int, decimal, decimal>>();
+                                while (rdrSplit.Read())
+                                {
+                                    int sId = rdrSplit.GetInt32(0);
+                                    string pm = rdrSplit.GetString(1);
+                                    var match = System.Text.RegularExpressions.Regex.Match(pm, @"Cash:\s*Rs\.\s*([\d,.]+).*?Online:\s*Rs\.\s*([\d,.]+)");
+                                    if (match.Success)
+                                    {
+                                        decimal cVal = decimal.Parse(match.Groups[1].Value.Replace(",", ""));
+                                        decimal oVal = decimal.Parse(match.Groups[2].Value.Replace(",", ""));
+                                        splits.Add(new Tuple<int, decimal, decimal>(sId, cVal, oVal));
+                                    }
+                                }
+                                rdrSplit.Close();
+
+                                foreach (var s in splits)
+                                {
+                                    using (SqlCommand updCmd = new SqlCommand("UPDATE Sales SET CashAmount = @c, OnlineAmount = @o WHERE Id = @id", conn))
+                                    {
+                                        updCmd.Parameters.AddWithValue("@c", s.Item2);
+                                        updCmd.Parameters.AddWithValue("@o", s.Item3);
+                                        updCmd.Parameters.AddWithValue("@id", s.Item1);
+                                        updCmd.ExecuteNonQuery();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
 
                     // SaleDetails Table
                     ExecuteNonQuery(@"
@@ -915,6 +984,8 @@ namespace MeroDokan
                                 ReturnDate DATETIME NOT NULL DEFAULT GETDATE(),
                                 TotalRefund DECIMAL(18,2) NOT NULL DEFAULT 0.00,
                                 CashRefund DECIMAL(18,2) NOT NULL DEFAULT 0.00,
+                                OnlineRefund DECIMAL(18,2) NOT NULL DEFAULT 0.00,
+                                RefundMethod NVARCHAR(50) NOT NULL DEFAULT 'Cash',
                                 CreatedBy INT NULL FOREIGN KEY REFERENCES Users(Id)
                             )
                         END
@@ -923,6 +994,14 @@ namespace MeroDokan
                             IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('SalesReturns') AND name = 'CashRefund')
                             BEGIN
                                 ALTER TABLE SalesReturns ADD CashRefund DECIMAL(18,2) NOT NULL DEFAULT 0.00;
+                            END
+                            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('SalesReturns') AND name = 'OnlineRefund')
+                            BEGIN
+                                ALTER TABLE SalesReturns ADD OnlineRefund DECIMAL(18,2) NOT NULL DEFAULT 0.00;
+                            END
+                            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('SalesReturns') AND name = 'RefundMethod')
+                            BEGIN
+                                ALTER TABLE SalesReturns ADD RefundMethod NVARCHAR(50) NOT NULL DEFAULT 'Cash';
                             END
                         END", conn);
 

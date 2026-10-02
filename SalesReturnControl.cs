@@ -18,6 +18,7 @@ namespace MeroDokan
         private DataGridView gridReturnItems;
         private Label lblRefundTotal;
         private Button btnProcessRefund;
+        private ComboBox comboRefundMethod;
 
         private int activeSaleId = 0;
         private DataTable returnTable;
@@ -188,14 +189,33 @@ namespace MeroDokan
             lblRefundTotal = new Label();
             lblRefundTotal.Text = "Rs. 0.00";
             lblRefundTotal.Location = new Point(15, 45);
-            lblRefundTotal.Size = new Size(240, 50);
-            Theme.StyleLabel(lblRefundTotal, Theme.Success, new Font("Segoe UI", 24F, FontStyle.Bold));
+            lblRefundTotal.Size = new Size(240, 45);
+            Theme.StyleLabel(lblRefundTotal, Theme.Success, new Font("Segoe UI", 22F, FontStyle.Bold));
             refundPanel.Controls.Add(lblRefundTotal);
+
+            // Refund Mode Selector
+            Label lblRefundMode = new Label();
+            lblRefundMode.Text = "Refund Mode:";
+            lblRefundMode.Location = new Point(15, 102);
+            lblRefundMode.AutoSize = true;
+            Theme.StyleLabel(lblRefundMode, Theme.TextDark, Theme.BoldFont);
+            refundPanel.Controls.Add(lblRefundMode);
+
+            comboRefundMethod = new ComboBox();
+            comboRefundMethod.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboRefundMethod.Items.AddRange(new object[] { "Cash Refund (Drawer)", "Online / UPI Refund (Bank)" });
+            comboRefundMethod.SelectedIndex = 0;
+            comboRefundMethod.Location = new Point(115, 98);
+            comboRefundMethod.Size = new Size(185, 28);
+            comboRefundMethod.Font = Theme.MainFont;
+            comboRefundMethod.BackColor = Color.FromArgb(31, 41, 55);
+            comboRefundMethod.ForeColor = Theme.TextLight;
+            refundPanel.Controls.Add(comboRefundMethod);
 
             btnProcessRefund = new Button();
             btnProcessRefund.Text = "🔄 PROCESS RETURN";
-            btnProcessRefund.Size = new Size(220, 55);
-            btnProcessRefund.Location = new Point(295, 45);
+            btnProcessRefund.Size = new Size(210, 52);
+            btnProcessRefund.Location = new Point(305, 45);
             btnProcessRefund.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             Theme.StyleSuccessButton(btnProcessRefund);
             btnProcessRefund.Click += BtnProcessRefund_Click;
@@ -322,7 +342,24 @@ namespace MeroDokan
                                 lblCustomerVal.Text = rdr["CustomerName"].ToString();
                                 lblDateVal.Text = Convert.ToDateTime(rdr["SaleDate"]).ToString("yyyy-MM-dd HH:mm");
                                 lblOriginalTotalVal.Text = $"Rs. {Convert.ToDecimal(rdr["GrandTotal"]):N2}";
-                                lblPaymentModeVal.Text = rdr["PaymentMethod"].ToString();
+                                string origPayMode = rdr["PaymentMethod"].ToString();
+                                lblPaymentModeVal.Text = origPayMode;
+
+                                // Auto-default refund method to match the original payment method
+                                if (comboRefundMethod != null)
+                                {
+                                    if (origPayMode.IndexOf("UPI", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                        origPayMode.IndexOf("Card", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                        origPayMode.IndexOf("QR", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                        origPayMode.IndexOf("Online", StringComparison.OrdinalIgnoreCase) >= 0)
+                                    {
+                                        comboRefundMethod.SelectedIndex = 1; // "Online / UPI Refund (Bank)"
+                                    }
+                                    else
+                                    {
+                                        comboRefundMethod.SelectedIndex = 0; // "Cash Refund (Drawer)"
+                                    }
+                                }
 
                                 decimal subTotal = Convert.ToDecimal(rdr["SubTotal"]);
                                 decimal discount = Convert.ToDecimal(rdr["Discount"]);
@@ -405,6 +442,7 @@ namespace MeroDokan
             lblDateVal.Text = "--";
             lblOriginalTotalVal.Text = "--";
             lblPaymentModeVal.Text = "--";
+            if (comboRefundMethod != null) comboRefundMethod.SelectedIndex = 0;
             returnTable.Clear();
             CalculateRefundTotals();
         }
@@ -571,7 +609,6 @@ namespace MeroDokan
                     }
 
                     decimal dueOffset = 0;
-                    decimal cashRefund = refundTotalAmount;
 
                     if (customerId.HasValue && saleDueAmount > 0)
                     {
@@ -598,7 +635,6 @@ namespace MeroDokan
                         if (maxDueOffset < 0) maxDueOffset = 0;
 
                         dueOffset = Math.Min(refundTotalAmount, maxDueOffset);
-                        cashRefund = refundTotalAmount - dueOffset;
 
                         if (dueOffset > 0)
                         {
@@ -613,12 +649,34 @@ namespace MeroDokan
                         }
                     }
 
+                    decimal netPayableRefund = refundTotalAmount - dueOffset;
+                    decimal cashRefund = 0;
+                    decimal onlineRefund = 0;
+                    string refundMethod = "Cash";
+
+                    bool isOnlineRefund = (comboRefundMethod != null && comboRefundMethod.SelectedIndex == 1);
+                    if (netPayableRefund > 0)
+                    {
+                        if (isOnlineRefund)
+                        {
+                            onlineRefund = netPayableRefund;
+                            cashRefund = 0;
+                            refundMethod = "Online / UPI";
+                        }
+                        else
+                        {
+                            cashRefund = netPayableRefund;
+                            onlineRefund = 0;
+                            refundMethod = "Cash";
+                        }
+                    }
+
                     // 1. Insert Sales Returns Header
                     int returnId = 0;
                     string returnHeaderSql = @"
-                        INSERT INTO SalesReturns (ReturnNumber, SaleId, ReturnDate, TotalRefund, CashRefund, CreatedBy)
+                        INSERT INTO SalesReturns (ReturnNumber, SaleId, ReturnDate, TotalRefund, CashRefund, OnlineRefund, RefundMethod, CreatedBy)
                         OUTPUT INSERTED.Id
-                        VALUES (@retNum, @saleId, GETDATE(), @refund, @cashRefund, @userId)";
+                        VALUES (@retNum, @saleId, GETDATE(), @refund, @cashRefund, @onlineRefund, @refMethod, @userId)";
 
                     using (SqlCommand cmd = new SqlCommand(returnHeaderSql, conn, transaction))
                     {
@@ -626,6 +684,8 @@ namespace MeroDokan
                         cmd.Parameters.AddWithValue("@saleId", activeSaleId);
                         cmd.Parameters.AddWithValue("@refund", refundTotalAmount);
                         cmd.Parameters.AddWithValue("@cashRefund", cashRefund);
+                        cmd.Parameters.AddWithValue("@onlineRefund", onlineRefund);
+                        cmd.Parameters.AddWithValue("@refMethod", refundMethod);
                         cmd.Parameters.AddWithValue("@userId", Session.UserId);
                         returnId = (int)cmd.ExecuteScalar();
                     }
@@ -678,11 +738,15 @@ namespace MeroDokan
                     string successMsg = $"Sales return processed successfully!\nReturn Receipt: {returnNumber}\nTotal Refund: Rs. {refundTotalAmount:N2}";
                     if (dueOffset > 0)
                     {
-                        successMsg += $"\nAmount Offset from Dues: Rs. {dueOffset:N2}\nCash Refund Paid: Rs. {cashRefund:N2}";
+                        successMsg += $"\nAmount Offset from Dues: Rs. {dueOffset:N2}";
                     }
-                    else
+                    if (cashRefund > 0)
                     {
-                        successMsg += $"\nCash Refund Paid: Rs. {cashRefund:N2}";
+                        successMsg += $"\nCash Refund Paid: Rs. {cashRefund:N2} (Taken from Cash Drawer)";
+                    }
+                    if (onlineRefund > 0)
+                    {
+                        successMsg += $"\nOnline / UPI Refund: Rs. {onlineRefund:N2} (Deducted from Online / Bank)";
                     }
                     MessageBox.Show(successMsg, "Return Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
 

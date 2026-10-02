@@ -55,103 +55,166 @@ namespace MeroDokan
             Theme.StyleLabel(lblRole, Theme.TextDark, Theme.MainFont);
             this.Controls.Add(lblRole);
 
-            // Card Layout
-            int cardW = 210;
-            int cardH = 100;
-            int gap = 20;
-
             bool isAdmin = string.Equals(Session.Role, "Admin", StringComparison.OrdinalIgnoreCase);
+
+            // Responsive Metric Cards Layout (Auto-stretches across full screen width)
+            TableLayoutPanel cardsPanel = new TableLayoutPanel();
+            cardsPanel.Location = new Point(20, 75);
+            cardsPanel.Size = new Size(this.Width - 40, 105);
+            cardsPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            cardsPanel.RowCount = 1;
+            cardsPanel.BackColor = Color.Transparent;
+            cardsPanel.Padding = new Padding(0);
+            cardsPanel.Margin = new Padding(0);
 
             if (isAdmin)
             {
+                cardsPanel.ColumnCount = 4;
+                cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+                cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+                cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+                cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+
                 // 1. Total Sales Card
-                cardSales = Theme.CreateCard(cardW, cardH);
-                cardSales.Location = new Point(20, 80);
-                cardSales.BackColor = Color.FromArgb(17, 24, 39); // Deep dark
+                cardSales = Theme.CreateCard(200, 100);
+                cardSales.Dock = DockStyle.Fill;
+                cardSales.Margin = new Padding(0, 0, 10, 0);
+                cardSales.BackColor = Color.FromArgb(17, 24, 39);
                 lblSalesVal = CreateCardContent(cardSales, "TOTAL REVENUE", "Rs. 0.00", Theme.Success);
-                this.Controls.Add(cardSales);
+                cardsPanel.Controls.Add(cardSales, 0, 0);
 
                 // 2. Total Purchases Card
-                cardPurchases = Theme.CreateCard(cardW, cardH);
-                cardPurchases.Location = new Point(20 + cardW + gap, 80);
+                cardPurchases = Theme.CreateCard(200, 100);
+                cardPurchases.Dock = DockStyle.Fill;
+                cardPurchases.Margin = new Padding(5, 0, 5, 0);
                 cardPurchases.BackColor = Color.FromArgb(17, 24, 39);
                 lblPurchasesVal = CreateCardContent(cardPurchases, "TOTAL PURCHASES", "Rs. 0.00", Theme.TextLight);
-                this.Controls.Add(cardPurchases);
+                cardsPanel.Controls.Add(cardPurchases, 1, 0);
 
                 // 3. Product Count Card
-                cardProducts = Theme.CreateCard(cardW, cardH);
-                cardProducts.Location = new Point(20 + (cardW + gap) * 2, 80);
+                cardProducts = Theme.CreateCard(200, 100);
+                cardProducts.Dock = DockStyle.Fill;
+                cardProducts.Margin = new Padding(5, 0, 5, 0);
                 cardProducts.BackColor = Color.FromArgb(17, 24, 39);
                 lblProductsVal = CreateCardContent(cardProducts, "TOTAL PRODUCTS", "0 Items", Theme.Accent);
-                this.Controls.Add(cardProducts);
+                cardsPanel.Controls.Add(cardProducts, 2, 0);
 
                 // 4. Low Stock Warning Card
-                cardLowStock = Theme.CreateCard(cardW, cardH);
-                cardLowStock.Location = new Point(20 + (cardW + gap) * 3, 80);
+                cardLowStock = Theme.CreateCard(200, 100);
+                cardLowStock.Dock = DockStyle.Fill;
+                cardLowStock.Margin = new Padding(10, 0, 0, 0);
                 cardLowStock.BackColor = Color.FromArgb(17, 24, 39);
                 lblLowStockVal = CreateCardContent(cardLowStock, "LOW STOCK WARNING", "0 Items", Theme.Danger);
-                this.Controls.Add(cardLowStock);
-
-                // Chart Container Panel
-                Label lblChartTitle = new Label();
-                lblChartTitle.Text = "Analytics Overview (Revenue vs Cost)";
-                lblChartTitle.Location = new Point(20, 200);
-                lblChartTitle.AutoSize = true;
-                Theme.StyleLabel(lblChartTitle, Theme.TextLight, Theme.SubHeaderFont);
-                this.Controls.Add(lblChartTitle);
-
-                chartPanel = new Panel();
-                chartPanel.Size = new Size(440, 390);
-                chartPanel.Location = new Point(20, 230);
-                chartPanel.BackColor = Color.FromArgb(17, 24, 39);
-                chartPanel.Paint += ChartPanel_Paint;
-                this.Controls.Add(chartPanel);
-
-                // Low Stock Table Container
-                Label lblTableTitle = new Label();
-                lblTableTitle.Text = "Critical Stock Replenishment Needed";
-                lblTableTitle.Location = new Point(480, 200);
-                lblTableTitle.AutoSize = true;
-                Theme.StyleLabel(lblTableTitle, Theme.TextLight, Theme.SubHeaderFont);
-                this.Controls.Add(lblTableTitle);
-
-                gridLowStock = new DataGridView();
-                gridLowStock.Size = new Size(450, 390);
-                gridLowStock.Location = new Point(480, 230);
-                Theme.StyleGrid(gridLowStock);
-                this.Controls.Add(gridLowStock);
+                cardsPanel.Controls.Add(cardLowStock, 3, 0);
             }
             else
             {
-                // 3. Product Count Card (positioned at first slot)
-                cardProducts = Theme.CreateCard(cardW, cardH);
-                cardProducts.Location = new Point(20, 80);
+                cardsPanel.ColumnCount = 2;
+                cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+                cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+
+                cardProducts = Theme.CreateCard(200, 100);
+                cardProducts.Dock = DockStyle.Fill;
+                cardProducts.Margin = new Padding(0, 0, 10, 0);
                 cardProducts.BackColor = Color.FromArgb(17, 24, 39);
                 lblProductsVal = CreateCardContent(cardProducts, "TOTAL PRODUCTS", "0 Items", Theme.Accent);
-                this.Controls.Add(cardProducts);
+                cardsPanel.Controls.Add(cardProducts, 0, 0);
 
-                // 4. Low Stock Warning Card (positioned at second slot)
-                cardLowStock = Theme.CreateCard(cardW, cardH);
-                cardLowStock.Location = new Point(20 + cardW + gap, 80);
+                cardLowStock = Theme.CreateCard(200, 100);
+                cardLowStock.Dock = DockStyle.Fill;
+                cardLowStock.Margin = new Padding(10, 0, 0, 0);
                 cardLowStock.BackColor = Color.FromArgb(17, 24, 39);
                 lblLowStockVal = CreateCardContent(cardLowStock, "LOW STOCK WARNING", "0 Items", Theme.Danger);
-                this.Controls.Add(cardLowStock);
+                cardsPanel.Controls.Add(cardLowStock, 1, 0);
+            }
+            this.Controls.Add(cardsPanel);
 
-                // Low Stock Table Container (shifted to left and expanded)
+            // Responsive Main Content Split (Chart on Left, Low Stock Grid on Right)
+            TableLayoutPanel mainContentGrid = new TableLayoutPanel();
+            mainContentGrid.Location = new Point(20, 195);
+            mainContentGrid.Size = new Size(this.Width - 40, this.Height - 215);
+            mainContentGrid.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+            mainContentGrid.RowCount = 1;
+            mainContentGrid.BackColor = Color.Transparent;
+            mainContentGrid.Padding = new Padding(0);
+            mainContentGrid.Margin = new Padding(0);
+
+            if (isAdmin)
+            {
+                mainContentGrid.ColumnCount = 2;
+                mainContentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+                mainContentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+
+                // Left Container: Chart Panel
+                Panel chartContainer = new Panel();
+                chartContainer.Dock = DockStyle.Fill;
+                chartContainer.Margin = new Padding(0, 0, 10, 0);
+                chartContainer.BackColor = Color.Transparent;
+
+                Label lblChartTitle = new Label();
+                lblChartTitle.Text = "Analytics Overview (Revenue vs Cost)";
+                lblChartTitle.Dock = DockStyle.Top;
+                lblChartTitle.Height = 30;
+                Theme.StyleLabel(lblChartTitle, Theme.TextLight, Theme.SubHeaderFont);
+                chartContainer.Controls.Add(lblChartTitle);
+
+                chartPanel = new Panel();
+                chartPanel.Dock = DockStyle.Fill;
+                chartPanel.BackColor = Color.FromArgb(17, 24, 39);
+                chartPanel.Paint += ChartPanel_Paint;
+                chartPanel.Resize += (s, e) => chartPanel.Invalidate();
+                chartContainer.Controls.Add(chartPanel);
+                chartPanel.BringToFront();
+
+                mainContentGrid.Controls.Add(chartContainer, 0, 0);
+
+                // Right Container: Critical Stock Table
+                Panel gridContainer = new Panel();
+                gridContainer.Dock = DockStyle.Fill;
+                gridContainer.Margin = new Padding(10, 0, 0, 0);
+                gridContainer.BackColor = Color.Transparent;
+
                 Label lblTableTitle = new Label();
                 lblTableTitle.Text = "Critical Stock Replenishment Needed";
-                lblTableTitle.Location = new Point(20, 200);
-                lblTableTitle.AutoSize = true;
+                lblTableTitle.Dock = DockStyle.Top;
+                lblTableTitle.Height = 30;
                 Theme.StyleLabel(lblTableTitle, Theme.TextLight, Theme.SubHeaderFont);
-                this.Controls.Add(lblTableTitle);
+                gridContainer.Controls.Add(lblTableTitle);
 
                 gridLowStock = new DataGridView();
-                gridLowStock.Size = new Size(910, 390);
-                gridLowStock.Location = new Point(20, 230);
-                gridLowStock.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+                gridLowStock.Dock = DockStyle.Fill;
                 Theme.StyleGrid(gridLowStock);
-                this.Controls.Add(gridLowStock);
+                gridContainer.Controls.Add(gridLowStock);
+                gridLowStock.BringToFront();
+
+                mainContentGrid.Controls.Add(gridContainer, 1, 0);
             }
+            else
+            {
+                mainContentGrid.ColumnCount = 1;
+                mainContentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+
+                Panel gridContainer = new Panel();
+                gridContainer.Dock = DockStyle.Fill;
+                gridContainer.Margin = new Padding(0);
+                gridContainer.BackColor = Color.Transparent;
+
+                Label lblTableTitle = new Label();
+                lblTableTitle.Text = "Critical Stock Replenishment Needed";
+                lblTableTitle.Dock = DockStyle.Top;
+                lblTableTitle.Height = 30;
+                Theme.StyleLabel(lblTableTitle, Theme.TextLight, Theme.SubHeaderFont);
+                gridContainer.Controls.Add(lblTableTitle);
+
+                gridLowStock = new DataGridView();
+                gridLowStock.Dock = DockStyle.Fill;
+                Theme.StyleGrid(gridLowStock);
+                gridContainer.Controls.Add(gridLowStock);
+                gridLowStock.BringToFront();
+
+                mainContentGrid.Controls.Add(gridContainer, 0, 0);
+            }
+            this.Controls.Add(mainContentGrid);
         }
 
         private Label CreateCardContent(Panel card, string header, string initVal, Color valColor)
@@ -286,30 +349,47 @@ namespace MeroDokan
 
             int w = chartPanel.Width;
             int h = chartPanel.Height;
+            if (w < 80 || h < 80) return;
+
+            int leftAxis = 50;
+            int rightMargin = 25;
+            int bottomAxis = h - 45;
+            int topAxis = 45;
 
             // Draw clean background grid lines
-            Pen gridPen = new Pen(Color.FromArgb(30, 41, 59), 1);
-            for (int i = 50; i < h - 50; i += 50)
+            using (Pen gridPen = new Pen(Color.FromArgb(30, 41, 59), 1))
             {
-                g.DrawLine(gridPen, 50, i, w - 20, i);
+                for (int i = topAxis; i < bottomAxis; i += 45)
+                {
+                    g.DrawLine(gridPen, leftAxis, i, w - rightMargin, i);
+                }
             }
 
             // Draw Y and X axis
-            Pen axisPen = new Pen(Theme.TextDark, 2);
-            g.DrawLine(axisPen, 50, 50, 50, h - 50); // Y axis starts at 50 to avoid title overlap
-            g.DrawLine(axisPen, 50, h - 50, w - 20, h - 50); // X axis
+            using (Pen axisPen = new Pen(Theme.TextDark, 2))
+            {
+                g.DrawLine(axisPen, leftAxis, topAxis, leftAxis, bottomAxis); // Y axis
+                g.DrawLine(axisPen, leftAxis, bottomAxis, w - rightMargin, bottomAxis); // X axis
+            }
 
             // Draw beautiful custom bars
             decimal maxVal = Math.Max(totalSales, totalCOGS);
             if (maxVal == 0) maxVal = 1000; // prevent division by zero
 
-            int chartH = h - 140; // Reduced from h - 100 to leave ample vertical spacing for labels
-            int barW = 80;
-            int barGap = 60;
+            int chartH = Math.Max(50, bottomAxis - topAxis - 40);
+            int chartPlotWidth = (w - rightMargin) - leftAxis;
+
+            // Dynamically calculate bar width and spacing based on available chart width
+            int barW = Math.Max(65, Math.Min(130, chartPlotWidth / 5));
+            int barGap = Math.Max(35, barW / 2);
+            int chartCenterX = leftAxis + chartPlotWidth / 2;
+
+            int salesBarX = chartCenterX - barW - barGap / 2;
+            int cogsBarX = chartCenterX + barGap / 2;
 
             // 1. Sales Bar
             int salesBarH = (int)((totalSales / maxVal) * chartH);
-            Rectangle salesRect = new Rectangle(50 + barGap, h - 50 - salesBarH, barW, salesBarH);
+            Rectangle salesRect = new Rectangle(salesBarX, bottomAxis - salesBarH, barW, salesBarH);
             using (Brush b = new SolidBrush(Theme.Success))
             {
                 g.FillRectangle(b, salesRect);
@@ -318,19 +398,25 @@ namespace MeroDokan
             // Dynamically center 'Revenue' label below Sales bar
             string revenueLabel = "Revenue";
             SizeF revLabelSize = g.MeasureString(revenueLabel, Theme.BoldFont);
-            float revLabelX = 50 + barGap + (barW - revLabelSize.Width) / 2f;
-            g.DrawString(revenueLabel, Theme.BoldFont, new SolidBrush(Theme.TextLight), revLabelX, h - 40);
+            float revLabelX = salesBarX + (barW - revLabelSize.Width) / 2f;
+            using (Brush bText = new SolidBrush(Theme.TextLight))
+            {
+                g.DrawString(revenueLabel, Theme.BoldFont, bText, revLabelX, bottomAxis + 8);
+            }
 
             // Dynamically center Sales amount above Sales bar
             string salesText = $"Rs. {totalSales:N0}";
             SizeF salesTextSize = g.MeasureString(salesText, Theme.MainFont);
-            float salesTextX = 50 + barGap + (barW - salesTextSize.Width) / 2f;
-            float salesTextY = h - 50 - salesBarH - salesTextSize.Height - 5;
-            g.DrawString(salesText, Theme.MainFont, new SolidBrush(Theme.TextLight), salesTextX, salesTextY);
+            float salesTextX = salesBarX + (barW - salesTextSize.Width) / 2f;
+            float salesTextY = Math.Max(topAxis - 20, bottomAxis - salesBarH - salesTextSize.Height - 5);
+            using (Brush bText = new SolidBrush(Theme.TextLight))
+            {
+                g.DrawString(salesText, Theme.MainFont, bText, salesTextX, salesTextY);
+            }
 
             // 2. Cost (Goods) Bar (using Cost of Goods Sold - COGS)
             int cogsBarH = (int)((totalCOGS / maxVal) * chartH);
-            Rectangle cogsRect = new Rectangle(50 + barGap + barW + barGap, h - 50 - cogsBarH, barW, cogsBarH);
+            Rectangle cogsRect = new Rectangle(cogsBarX, bottomAxis - cogsBarH, barW, cogsBarH);
             using (Brush b = new SolidBrush(Theme.Accent))
             {
                 g.FillRectangle(b, cogsRect);
@@ -339,22 +425,31 @@ namespace MeroDokan
             // Dynamically center 'Cost (Goods)' label below Cost bar
             string costLabel = "Cost (Goods)";
             SizeF costLabelSize = g.MeasureString(costLabel, Theme.BoldFont);
-            float costLabelX = 50 + barGap + barW + barGap + (barW - costLabelSize.Width) / 2f;
-            g.DrawString(costLabel, Theme.BoldFont, new SolidBrush(Theme.TextLight), costLabelX, h - 40);
+            float costLabelX = cogsBarX + (barW - costLabelSize.Width) / 2f;
+            using (Brush bText = new SolidBrush(Theme.TextLight))
+            {
+                g.DrawString(costLabel, Theme.BoldFont, bText, costLabelX, bottomAxis + 8);
+            }
 
             // Dynamically center Cost amount above Cost bar
             string cogsText = $"Rs. {totalCOGS:N0}";
             SizeF cogsTextSize = g.MeasureString(cogsText, Theme.MainFont);
-            float cogsTextX = 50 + barGap + barW + barGap + (barW - cogsTextSize.Width) / 2f;
-            float cogsTextY = h - 50 - cogsBarH - cogsTextSize.Height - 5;
-            g.DrawString(cogsText, Theme.MainFont, new SolidBrush(Theme.TextLight), cogsTextX, cogsTextY);
+            float cogsTextX = cogsBarX + (barW - cogsTextSize.Width) / 2f;
+            float cogsTextY = Math.Max(topAxis - 20, bottomAxis - cogsBarH - cogsTextSize.Height - 5);
+            using (Brush bText = new SolidBrush(Theme.TextLight))
+            {
+                g.DrawString(cogsText, Theme.MainFont, bText, cogsTextX, cogsTextY);
+            }
 
-            // Net Profit Label - Positioned at Y = 15 for a clean, non-overlapping header
+            // Net Profit Label - Positioned cleanly at top left
             decimal netProfit = totalSales - totalCOGS;
             Color pColor = netProfit >= 0 ? Theme.Success : Theme.Danger;
             string pSign = netProfit >= 0 ? "+" : "";
             string pText = $"Net Performance: {pSign}Rs. {netProfit:N2}";
-            g.DrawString(pText, Theme.SubHeaderFont, new SolidBrush(pColor), 50, 15);
+            using (Brush bProfit = new SolidBrush(pColor))
+            {
+                g.DrawString(pText, Theme.SubHeaderFont, bProfit, leftAxis, 12);
+            }
         }
     }
 }

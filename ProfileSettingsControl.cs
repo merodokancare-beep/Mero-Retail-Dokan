@@ -93,8 +93,9 @@ namespace MeroDokan
             leftPanel.Controls.Add(lblOwnerName);
 
             txtOwnerName = new TextBox();
-            txtOwnerName.Size = new Size(410, 30);
+            txtOwnerName.Size = new Size(leftPanel.Width - 30, 30);
             txtOwnerName.Location = new Point(15, startY + 18);
+            txtOwnerName.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleTextBox(txtOwnerName);
             leftPanel.Controls.Add(txtOwnerName);
 
@@ -107,8 +108,9 @@ namespace MeroDokan
             leftPanel.Controls.Add(lblShopName);
 
             txtShopName = new TextBox();
-            txtShopName.Size = new Size(410, 30);
+            txtShopName.Size = new Size(leftPanel.Width - 30, 30);
             txtShopName.Location = new Point(15, startY + gapY + 18);
+            txtShopName.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleTextBox(txtShopName);
             leftPanel.Controls.Add(txtShopName);
 
@@ -121,8 +123,9 @@ namespace MeroDokan
             leftPanel.Controls.Add(lblGSTIN);
 
             txtGSTIN = new TextBox();
-            txtGSTIN.Size = new Size(410, 30);
+            txtGSTIN.Size = new Size(leftPanel.Width - 30, 30);
             txtGSTIN.Location = new Point(15, startY + gapY * 2 + 18);
+            txtGSTIN.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleTextBox(txtGSTIN);
             leftPanel.Controls.Add(txtGSTIN);
 
@@ -135,8 +138,9 @@ namespace MeroDokan
             leftPanel.Controls.Add(lblPhone);
 
             txtPhone = new TextBox();
-            txtPhone.Size = new Size(410, 30);
+            txtPhone.Size = new Size(leftPanel.Width - 30, 30);
             txtPhone.Location = new Point(15, startY + gapY * 3 + 18);
+            txtPhone.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleTextBox(txtPhone);
             leftPanel.Controls.Add(txtPhone);
 
@@ -149,8 +153,9 @@ namespace MeroDokan
             leftPanel.Controls.Add(lblEmail);
 
             txtEmail = new TextBox();
-            txtEmail.Size = new Size(410, 30);
+            txtEmail.Size = new Size(leftPanel.Width - 30, 30);
             txtEmail.Location = new Point(15, startY + gapY * 4 + 18);
+            txtEmail.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleTextBox(txtEmail);
             leftPanel.Controls.Add(txtEmail);
 
@@ -163,8 +168,9 @@ namespace MeroDokan
             leftPanel.Controls.Add(lblAddress);
 
             txtAddress = new TextBox();
-            txtAddress.Size = new Size(410, 30);
+            txtAddress.Size = new Size(leftPanel.Width - 30, 30);
             txtAddress.Location = new Point(15, startY + gapY * 5 + 18);
+            txtAddress.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleTextBox(txtAddress);
             leftPanel.Controls.Add(txtAddress);
 
@@ -177,32 +183,24 @@ namespace MeroDokan
             leftPanel.Controls.Add(lblBackupFolder);
 
             txtBackupFolder = new TextBox();
-            txtBackupFolder.Size = new Size(280, 30); // Compacted width to give button more space
+            txtBackupFolder.Size = new Size(leftPanel.Width - 160, 30);
             txtBackupFolder.Location = new Point(15, startY + gapY * 6 + 18);
+            txtBackupFolder.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleTextBox(txtBackupFolder);
             leftPanel.Controls.Add(txtBackupFolder);
 
             btnBrowseBackupPath = new Button();
             btnBrowseBackupPath.Text = "📂 Browse...";
-            btnBrowseBackupPath.Size = new Size(120, 38); // Wider and taller to prevent text clipping
-            btnBrowseBackupPath.Location = new Point(305, startY + (gapY * 6) + 13); // Shifted left and centered
+            btnBrowseBackupPath.Size = new Size(120, 38);
+            btnBrowseBackupPath.Location = new Point(leftPanel.Width - 135, startY + (gapY * 6) + 13);
+            btnBrowseBackupPath.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             Theme.StyleSecondaryButton(btnBrowseBackupPath);
             btnBrowseBackupPath.Click += BtnBrowseBackupPath_Click;
             leftPanel.Controls.Add(btnBrowseBackupPath);
 
-            // 8. Google Drive Address
-            Label lblGoogleDrive = new Label();
-            lblGoogleDrive.Text = "Google Drive Backup Folder Link / Address";
-            lblGoogleDrive.Location = new Point(15, startY + gapY * 7);
-            lblGoogleDrive.AutoSize = true;
-            Theme.StyleLabel(lblGoogleDrive, Theme.TextLight, Theme.BoldFont);
-            leftPanel.Controls.Add(lblGoogleDrive);
-
+            // 8. Google Drive Address (Hidden from client - managed internally)
             txtGoogleDriveAddress = new TextBox();
-            txtGoogleDriveAddress.Size = new Size(410, 30);
-            txtGoogleDriveAddress.Location = new Point(15, startY + gapY * 7 + 18);
-            Theme.StyleTextBox(txtGoogleDriveAddress);
-            leftPanel.Controls.Add(txtGoogleDriveAddress);
+            txtGoogleDriveAddress.Visible = false;
 
             // ==========================================
             // RIGHT COLUMN: Theme & Image Branding
@@ -321,8 +319,9 @@ namespace MeroDokan
             // 4. Save Settings Button
             btnSave = new Button();
             btnSave.Text = "💾 SAVE PROFILE CONFIGURATIONS";
-            btnSave.Size = new Size(410, 48);
+            btnSave.Size = new Size(rightPanel.Width - 30, 48);
             btnSave.Location = new Point(15, 435);
+            btnSave.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleSuccessButton(btnSave);
             btnSave.Click += BtnSave_Click;
             rightPanel.Controls.Add(btnSave);
@@ -458,6 +457,10 @@ namespace MeroDokan
             string addr = txtAddress.Text.Trim();
             string backupFolder = txtBackupFolder.Text.Trim();
             string gDriveAddr = txtGoogleDriveAddress.Text.Trim();
+            if (string.IsNullOrEmpty(gDriveAddr))
+            {
+                gDriveAddr = "https://script.google.com/macros/s/AKfycbwm3WKMbeToLZt10WTPGrHwL4XsA8JgVO_H4MAaraDpssgTfUNs1x_ECblU4cKkRMAx/exec";
+            }
             string themePreset = comboThemePreset.SelectedItem?.ToString() ?? "Dark Slate";
             if (themePreset == "Custom Theme" && !string.IsNullOrEmpty(customThemeString))
             {

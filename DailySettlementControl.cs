@@ -17,6 +17,7 @@ namespace MeroDokan
         private Label lblPrevDueRepayments;
         private Label lblOpeningCashText;
         private Label lblOnlinePayment;
+        private Label lblRefundsToday;
         private Label lblExpectedCash;
         private TextBox txtActualCash;
         private TextBox txtRemarks;
@@ -36,9 +37,12 @@ namespace MeroDokan
         private decimal dueTodayUnpaid = 0;
         private decimal openingCash = 0;
         private decimal cashRefunds = 0;
+        private decimal onlineRefunds = 0;
         private decimal onlineSales = 0;
         private decimal onlineDueRepayments = 0;
         private decimal totalOnlinePayment = 0;
+        private Label lblCrossNotice;
+        private bool _hasRetriedSchemaInit = false;
 
         public DailySettlementControl()
         {
@@ -64,8 +68,9 @@ namespace MeroDokan
 
             // Top bar - Date Selection
             Panel topBar = new Panel();
-            topBar.Size = new Size(910, 45);
+            topBar.Size = new Size(this.Width - 40, 45);
             topBar.Location = new Point(20, 60);
+            topBar.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             topBar.BackColor = Color.Transparent;
 
             Label lblDate = new Label();
@@ -81,7 +86,7 @@ namespace MeroDokan
             dtpSettlementDate.Font = Theme.MainFont;
             dtpSettlementDate.Format = DateTimePickerFormat.Short;
             dtpSettlementDate.Value = DateTime.Today;
-            dtpSettlementDate.ValueChanged += (s, e) => { LoadOpeningCash(); LoadTodayMetrics(); };
+            dtpSettlementDate.ValueChanged += (s, e) => { _hasRetriedSchemaInit = false; LoadOpeningCash(); LoadTodayMetrics(); };
             topBar.Controls.Add(dtpSettlementDate);
 
             btnRefresh = new Button();
@@ -89,19 +94,20 @@ namespace MeroDokan
             btnRefresh.Size = new Size(180, 32);
             btnRefresh.Location = new Point(370, 6);
             Theme.StylePrimaryButton(btnRefresh);
-            btnRefresh.Click += (s, e) => { LoadOpeningCash(); LoadTodayMetrics(); };
+            btnRefresh.Click += (s, e) => { _hasRetriedSchemaInit = false; LoadOpeningCash(); LoadTodayMetrics(); };
             topBar.Controls.Add(btnRefresh);
 
             this.Controls.Add(topBar);
 
             // Unified Card for Settlement Fields
             Panel mainPanel = new Panel();
-            mainPanel.Size = new Size(910, 280);
+            mainPanel.Size = new Size(this.Width - 40, 320);
             mainPanel.Location = new Point(20, 115);
+            mainPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             mainPanel.BackColor = Color.Transparent;
             this.Controls.Add(mainPanel);
 
-            Panel cardMain = Theme.CreateCard(910, 280);
+            Panel cardMain = Theme.CreateCard(this.Width - 40, 320);
             cardMain.Dock = DockStyle.Fill;
             cardMain.BackColor = Color.FromArgb(17, 24, 39);
             mainPanel.Controls.Add(cardMain);
@@ -114,107 +120,120 @@ namespace MeroDokan
             Theme.StyleLabel(lblCol1Header, Theme.TextDark, new Font("Segoe UI Semibold", 8F, FontStyle.Bold));
             cardMain.Controls.Add(lblCol1Header);
 
-            // Total Sale Today
+            // 1. Total Sale Today
             Label lblSaleTitle = new Label();
             lblSaleTitle.Text = "Total Sale Today:";
-            lblSaleTitle.Location = new Point(20, 50);
+            lblSaleTitle.Location = new Point(20, 42);
             lblSaleTitle.AutoSize = true;
             Theme.StyleLabel(lblSaleTitle, Theme.TextLight, Theme.BoldFont);
             cardMain.Controls.Add(lblSaleTitle);
 
             lblTotalSaleToday = new Label();
             lblTotalSaleToday.Text = "Rs. 0.00";
-            lblTotalSaleToday.Location = new Point(280, 50);
+            lblTotalSaleToday.Location = new Point(270, 42);
             lblTotalSaleToday.AutoSize = true;
             Theme.StyleLabel(lblTotalSaleToday, Theme.Accent, Theme.BoldFont);
             cardMain.Controls.Add(lblTotalSaleToday);
 
-            // Due Today
+            // 2. Due Today
             Label lblDueTitle = new Label();
             lblDueTitle.Text = "Due Today (Unpaid):";
-            lblDueTitle.Location = new Point(20, 85);
+            lblDueTitle.Location = new Point(20, 70);
             lblDueTitle.AutoSize = true;
             Theme.StyleLabel(lblDueTitle, Theme.TextLight, Theme.BoldFont);
             cardMain.Controls.Add(lblDueTitle);
 
             lblDueToday = new Label();
             lblDueToday.Text = "Rs. 0.00";
-            lblDueToday.Location = new Point(280, 85);
+            lblDueToday.Location = new Point(270, 70);
             lblDueToday.AutoSize = true;
             Theme.StyleLabel(lblDueToday, Theme.TextLight, Theme.BoldFont);
             cardMain.Controls.Add(lblDueToday);
 
-            // Previous Due Collections
+            // 3. Previous Due Collections
             Label lblPrevDueTitle = new Label();
             lblPrevDueTitle.Text = "Prev Date Due Repayment:";
-            lblPrevDueTitle.Location = new Point(20, 120);
+            lblPrevDueTitle.Location = new Point(20, 98);
             lblPrevDueTitle.AutoSize = true;
             Theme.StyleLabel(lblPrevDueTitle, Theme.TextLight, Theme.MainFont);
             cardMain.Controls.Add(lblPrevDueTitle);
 
             lblPrevDueRepayments = new Label();
             lblPrevDueRepayments.Text = "Rs. 0.00";
-            lblPrevDueRepayments.Location = new Point(280, 120);
+            lblPrevDueRepayments.Location = new Point(270, 98);
             lblPrevDueRepayments.AutoSize = true;
             Theme.StyleLabel(lblPrevDueRepayments, Theme.TextLight, Theme.BoldFont);
             cardMain.Controls.Add(lblPrevDueRepayments);
 
-            // Opening Cash (Hidden as per request)
-            Label lblOpTitle = new Label();
-            lblOpTitle.Text = "Opening Cash (Previous Closing):";
-            lblOpTitle.Location = new Point(20, 155);
-            lblOpTitle.AutoSize = true;
-            lblOpTitle.Visible = false;
-            Theme.StyleLabel(lblOpTitle, Theme.TextLight, Theme.MainFont);
-            cardMain.Controls.Add(lblOpTitle);
-
-            lblOpeningCashText = new Label();
-            lblOpeningCashText.Text = "Rs. 0.00";
-            lblOpeningCashText.Location = new Point(280, 155);
-            lblOpeningCashText.AutoSize = true;
-            lblOpeningCashText.Visible = false;
-            Theme.StyleLabel(lblOpeningCashText, Theme.TextLight, Theme.BoldFont);
-            cardMain.Controls.Add(lblOpeningCashText);
-
-            // Online Payment (Card/QR)
+            // 4. Online Payment (Card/QR)
             Label lblOnlineTitle = new Label();
             lblOnlineTitle.Text = "Online Payment (Card/QR):";
-            lblOnlineTitle.Location = new Point(20, 155);
+            lblOnlineTitle.Location = new Point(20, 126);
             lblOnlineTitle.AutoSize = true;
             Theme.StyleLabel(lblOnlineTitle, Theme.TextLight, Theme.MainFont);
             cardMain.Controls.Add(lblOnlineTitle);
 
             lblOnlinePayment = new Label();
             lblOnlinePayment.Text = "Rs. 0.00";
-            lblOnlinePayment.Location = new Point(280, 155);
+            lblOnlinePayment.Location = new Point(270, 126);
             lblOnlinePayment.AutoSize = true;
             Theme.StyleLabel(lblOnlinePayment, Theme.TextLight, Theme.BoldFont);
             cardMain.Controls.Add(lblOnlinePayment);
 
-            // Expected/Total Cash
+            // 5. Total Refunds Made Today
+            Label lblRefundTitle = new Label();
+            lblRefundTitle.Text = "Refunds Given Today:";
+            lblRefundTitle.Location = new Point(20, 154);
+            lblRefundTitle.AutoSize = true;
+            Theme.StyleLabel(lblRefundTitle, Theme.TextLight, Theme.MainFont);
+            cardMain.Controls.Add(lblRefundTitle);
+
+            lblRefundsToday = new Label();
+            lblRefundsToday.Text = "Rs. 0.00";
+            lblRefundsToday.Location = new Point(270, 154);
+            lblRefundsToday.AutoSize = true;
+            lblRefundsToday.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+            Theme.StyleLabel(lblRefundsToday, Theme.Danger, lblRefundsToday.Font);
+            cardMain.Controls.Add(lblRefundsToday);
+
+            // 6. Expected/Total Cash in Drawer
             Label lblExpectedTitle = new Label();
             lblExpectedTitle.Text = "Total Cash in Drawer:";
-            lblExpectedTitle.Location = new Point(20, 190);
+            lblExpectedTitle.Location = new Point(20, 184);
             lblExpectedTitle.AutoSize = true;
             Theme.StyleLabel(lblExpectedTitle, Theme.TextLight, Theme.BoldFont);
             cardMain.Controls.Add(lblExpectedTitle);
 
             lblExpectedCash = new Label();
             lblExpectedCash.Text = "Rs. 0.00";
-            lblExpectedCash.Location = new Point(280, 190);
+            lblExpectedCash.Location = new Point(270, 184);
             lblExpectedCash.AutoSize = true;
             lblExpectedCash.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
             Theme.StyleLabel(lblExpectedCash, Theme.Success, lblExpectedCash.Font);
             cardMain.Controls.Add(lblExpectedCash);
 
+            // 7. Explicit Refund Notice & Settlement Alert Box
+            lblCrossNotice = new Label();
+            lblCrossNotice.Text = "";
+            lblCrossNotice.Location = new Point(20, 216);
+            lblCrossNotice.Size = new Size(410, 95);
+            lblCrossNotice.Visible = true;
+            lblCrossNotice.Font = new Font("Segoe UI", 8.5F, FontStyle.Regular);
+            lblCrossNotice.ForeColor = Color.FromArgb(245, 158, 11);
+            cardMain.Controls.Add(lblCrossNotice);
+
+            // Opening Cash hidden control kept for backwards compatibility
+            lblOpeningCashText = new Label();
+            lblOpeningCashText.Text = "Rs. 0.00";
+            lblOpeningCashText.Visible = false;
+            cardMain.Controls.Add(lblOpeningCashText);
 
             // Middle vertical separator
             Panel sepCol = new Panel();
-            sepCol.Size = new Size(1, 230);
-            sepCol.Location = new Point(440, 25);
+            sepCol.Size = new Size(1, 280);
+            sepCol.Location = new Point(440, 20);
             sepCol.BackColor = Theme.AlternateRow;
             cardMain.Controls.Add(sepCol);
-
 
             // COLUMN 2: Verification Input
             Label lblCol2Header = new Label();
@@ -272,18 +291,37 @@ namespace MeroDokan
             btnSaveSettlement.Click += BtnSaveSettlement_Click;
             cardMain.Controls.Add(btnSaveSettlement);
 
+            // Dynamic layout adjustment for column 2 and separator
+            cardMain.Resize += (s, e) =>
+            {
+                int midX = cardMain.Width / 2;
+                sepCol.Location = new Point(midX, 20);
+                sepCol.Height = cardMain.Height - 40;
+                lblCrossNotice.Width = Math.Max(200, midX - 35);
+
+                int col2Left = midX + 25;
+                lblCol2Header.Location = new Point(col2Left, 15);
+                lblActTitle.Location = new Point(col2Left, 45);
+                txtActualCash.Location = new Point(col2Left + 185, 42);
+                lblRemarks.Location = new Point(col2Left, 85);
+                txtRemarks.Location = new Point(col2Left, 110);
+                txtRemarks.Width = Math.Max(260, cardMain.Width - col2Left - 30);
+                lblStatusMessage.Location = new Point(col2Left, 155);
+                lblStatusMessage.Width = Math.Max(260, cardMain.Width - col2Left - 30);
+                btnSaveSettlement.Location = new Point(col2Left, 220);
+            };
 
             // BOTTOM PANEL: Historical Log
             Label lblHistoryHeader = new Label();
             lblHistoryHeader.Text = "Historical Reconciliation Log Book";
-            lblHistoryHeader.Location = new Point(20, 415);
+            lblHistoryHeader.Location = new Point(20, 450);
             lblHistoryHeader.AutoSize = true;
             Theme.StyleLabel(lblHistoryHeader, Theme.TextLight, Theme.SubHeaderFont);
             this.Controls.Add(lblHistoryHeader);
 
             gridHistory = new DataGridView();
-            gridHistory.Location = new Point(20, 450);
-            gridHistory.Size = new Size(910, 180);
+            gridHistory.Location = new Point(20, 480);
+            gridHistory.Size = new Size(this.Width - 40, this.Height - 500);
             gridHistory.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             Theme.StyleGrid(gridHistory);
             this.Controls.Add(gridHistory);
@@ -291,29 +329,9 @@ namespace MeroDokan
 
         private void LoadOpeningCash()
         {
+            // As per user specification: No opening cash balance / rollforward. Each day starts at Rs. 0.00.
             openingCash = 0;
-            try
-            {
-                using (SqlConnection conn = new SqlConnection(DatabaseHelper.ConnectionString))
-                {
-                    conn.Open();
-                    // Load Closing/Actual Cash of the latest settlement as opening cash
-                    string query = "SELECT TOP 1 ActualCash FROM DailySettlements ORDER BY SettlementDate DESC, Id DESC";
-                    using (SqlCommand cmd = new SqlCommand(query, conn))
-                    {
-                        object result = cmd.ExecuteScalar();
-                        if (result != null && result != DBNull.Value)
-                        {
-                            openingCash = Convert.ToDecimal(result);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error retrieving opening cash rollforward: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            lblOpeningCashText.Text = $"Rs. {openingCash:N2}";
+            if (lblOpeningCashText != null) lblOpeningCashText.Text = "Rs. 0.00";
         }
 
         private void LoadTodayMetrics()
@@ -328,8 +346,17 @@ namespace MeroDokan
                 {
                     conn.Open();
 
-                    // 1. Cash Sales Today
-                    string salesSql = "SELECT ISNULL(SUM(AmountPaid), 0) FROM Sales WHERE SaleDate >= @todayStart AND SaleDate < @todayEnd AND PaymentMethod = 'Cash'";
+                    // 1. Cash Sales Today (accurately handles Cash and Split cash portions)
+                    string salesSql = @"
+                        SELECT ISNULL(SUM(
+                            CASE 
+                                WHEN CashAmount > 0 OR OnlineAmount > 0 THEN CashAmount
+                                WHEN PaymentMethod = 'Cash' THEN AmountPaid
+                                ELSE 0 
+                            END
+                        ), 0) 
+                        FROM Sales 
+                        WHERE SaleDate >= @todayStart AND SaleDate < @todayEnd";
                     using (SqlCommand cmd = new SqlCommand(salesSql, conn))
                     {
                         cmd.Parameters.AddWithValue("@todayStart", todayStart);
@@ -337,8 +364,17 @@ namespace MeroDokan
                         cashSales = Convert.ToDecimal(cmd.ExecuteScalar());
                     }
 
-                    // 1b. Online Sales Today
-                    string onlineSalesSql = "SELECT ISNULL(SUM(AmountPaid), 0) FROM Sales WHERE SaleDate >= @todayStart AND SaleDate < @todayEnd AND PaymentMethod IN ('Card', 'QR Pay')";
+                    // 1b. Online Sales Today (accurately handles Card/UPI/QR and Split online portions)
+                    string onlineSalesSql = @"
+                        SELECT ISNULL(SUM(
+                            CASE 
+                                WHEN CashAmount > 0 OR OnlineAmount > 0 THEN OnlineAmount
+                                WHEN (PaymentMethod IN ('Card', 'QR Pay', 'UPI') OR PaymentMethod LIKE '%Online%') AND PaymentMethod NOT LIKE 'Split%' THEN AmountPaid
+                                ELSE 0 
+                            END
+                        ), 0) 
+                        FROM Sales 
+                        WHERE SaleDate >= @todayStart AND SaleDate < @todayEnd";
                     using (SqlCommand cmd = new SqlCommand(onlineSalesSql, conn))
                     {
                         cmd.Parameters.AddWithValue("@todayStart", todayStart);
@@ -383,8 +419,8 @@ namespace MeroDokan
                     todayDueRepayments = totalRepayments - prevDueRepayments;
                     if (todayDueRepayments < 0) todayDueRepayments = 0;
 
-                    // 4b. Online Due Repayments Today (Card / QR Pay)
-                    string onlineRepaymentsSql = "SELECT ISNULL(SUM(Amount), 0) FROM CustomerPayments WHERE PaymentDate >= @todayStart AND PaymentDate < @todayEnd AND PaymentMethod IN ('Card', 'QR Pay')";
+                    // 4b. Online Due Repayments Today (Card / QR Pay / UPI)
+                    string onlineRepaymentsSql = "SELECT ISNULL(SUM(Amount), 0) FROM CustomerPayments WHERE PaymentDate >= @todayStart AND PaymentDate < @todayEnd AND PaymentMethod IN ('Card', 'QR Pay', 'UPI')";
                     using (SqlCommand cmd = new SqlCommand(onlineRepaymentsSql, conn))
                     {
                         cmd.Parameters.AddWithValue("@todayStart", todayStart);
@@ -392,40 +428,125 @@ namespace MeroDokan
                         onlineDueRepayments = Convert.ToDecimal(cmd.ExecuteScalar());
                     }
 
-                    // 5. Cash Refunds Today
-                    string refundsSql = "SELECT ISNULL(SUM(CashRefund), 0) FROM SalesReturns WHERE ReturnDate >= @todayStart AND ReturnDate < @todayEnd";
+                    // 5. Refunds Today (Cash & Online)
+                    string refundsSql = "SELECT ISNULL(SUM(CashRefund), 0), ISNULL(SUM(OnlineRefund), 0) FROM SalesReturns WHERE ReturnDate >= @todayStart AND ReturnDate < @todayEnd";
                     using (SqlCommand cmd = new SqlCommand(refundsSql, conn))
                     {
                         cmd.Parameters.AddWithValue("@todayStart", todayStart);
                         cmd.Parameters.AddWithValue("@todayEnd", todayEnd);
-                        cashRefunds = Convert.ToDecimal(cmd.ExecuteScalar());
+                        using (SqlDataReader rdr = cmd.ExecuteReader())
+                        {
+                            if (rdr.Read())
+                            {
+                                cashRefunds = rdr.GetDecimal(0);
+                                onlineRefunds = rdr.GetDecimal(1);
+                            }
+                        }
                     }
                 }
 
                 // Calculations
-                totalSaleToday = cashSales + onlineSales + duesCreated - cashRefunds;
+                totalSaleToday = cashSales + onlineSales + duesCreated - (cashRefunds + onlineRefunds);
                 dueTodayUnpaid = duesCreated - todayDueRepayments;
                 if (dueTodayUnpaid < 0) dueTodayUnpaid = 0;
 
-                totalOnlinePayment = onlineSales + onlineDueRepayments;
+                totalOnlinePayment = (onlineSales + onlineDueRepayments) - onlineRefunds;
 
                 lblTotalSaleToday.Text = $"Rs. {totalSaleToday:N2}";
                 lblDueToday.Text = $"Rs. {dueTodayUnpaid:N2}";
                 lblPrevDueRepayments.Text = $"Rs. {prevDueRepayments:N2}";
                 lblOnlinePayment.Text = $"Rs. {totalOnlinePayment:N2}";
 
+                decimal totalRefunds = cashRefunds + onlineRefunds;
+                if (totalRefunds > 0)
+                {
+                    if (cashRefunds > 0 && onlineRefunds > 0)
+                        lblRefundsToday.Text = $"Rs. {totalRefunds:N2} (Cash: {cashRefunds:N0}, Online: {onlineRefunds:N0})";
+                    else if (cashRefunds > 0)
+                        lblRefundsToday.Text = $"Rs. {cashRefunds:N2} (Cash)";
+                    else
+                        lblRefundsToday.Text = $"Rs. {onlineRefunds:N2} (Online)";
+                }
+                else
+                {
+                    lblRefundsToday.Text = "Rs. 0.00";
+                }
+
                 UpdateCalculations();
             }
             catch (Exception ex)
             {
+                // Self-healing: If an older database backup was restored externally or columns are missing,
+                // automatically initialize and upgrade the database schema, then retry once.
+                if (!_hasRetriedSchemaInit && (ex.Message.Contains("Invalid column name") || ex.Message.Contains("Invalid object name")))
+                {
+                    _hasRetriedSchemaInit = true;
+                    try
+                    {
+                        DatabaseHelper.InitializeDatabase();
+                        LoadTodayMetrics();
+                        return;
+                    }
+                    catch { }
+                }
+
                 MessageBox.Show($"Error loading daily financials: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void UpdateCalculations()
         {
-            expectedCash = cashSales + prevDueRepayments + todayDueRepayments - cashRefunds;
+            decimal todayNetCash = cashSales + prevDueRepayments + todayDueRepayments - cashRefunds;
+            // No opening balance - drawer only reflects today's net cash
+            expectedCash = todayNetCash;
             lblExpectedCash.Text = $"Rs. {expectedCash:N2}";
+
+            if (expectedCash < 0)
+            {
+                lblExpectedCash.ForeColor = Theme.Danger;
+            }
+            else
+            {
+                lblExpectedCash.ForeColor = Theme.Success;
+            }
+
+            // Explicit Messages about Any Refunds Made During Settlement
+            decimal totalRefunds = cashRefunds + onlineRefunds;
+            if (totalRefunds > 0)
+            {
+                lblCrossNotice.Visible = true;
+                System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                sb.AppendLine($"📢 REFUND NOTICE TODAY (Total: Rs. {totalRefunds:N2}):");
+
+                if (cashRefunds > 0)
+                {
+                    sb.AppendLine($"• Cash Refund: Rs. {cashRefunds:N2} returned in cash from drawer.");
+                }
+                if (onlineRefunds > 0)
+                {
+                    sb.AppendLine($"• Online Refund: Rs. {onlineRefunds:N2} refunded via bank/UPI.");
+                }
+
+                if (cashRefunds > 0 && todayNetCash < 0)
+                {
+                    decimal deficit = Math.Abs(todayNetCash);
+                    sb.AppendLine($"⚠️ Cash Deficit Alert: Cash refund exceeds cash sales by Rs. {deficit:N2}.");
+                    sb.AppendLine($"(Items sold online were refunded in cash; transfer Rs. {deficit:N2} from bank to drawer).");
+                    lblCrossNotice.ForeColor = Color.FromArgb(251, 146, 60); // Amber orange
+                }
+                else
+                {
+                    lblCrossNotice.ForeColor = Color.FromArgb(147, 197, 253); // Soft sky blue
+                }
+
+                lblCrossNotice.Text = sb.ToString().TrimEnd();
+            }
+            else
+            {
+                lblCrossNotice.Visible = true;
+                lblCrossNotice.ForeColor = Color.FromArgb(156, 163, 175);
+                lblCrossNotice.Text = "ℹ️ No sales refunds were issued today.";
+            }
 
             decimal actualCash = 0;
             decimal.TryParse(txtActualCash.Text.Trim(), out actualCash);

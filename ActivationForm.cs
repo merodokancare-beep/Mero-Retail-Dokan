@@ -44,6 +44,7 @@ namespace MeroDokan
         private void InitializeComponent()
         {
             this.Text = "Mero Dokan - License Activation";
+            this.Icon = Theme.AppIcon;
             this.ClientSize = new Size(560, 430); // Sets inner client area precisely
             this.AutoScaleMode = AutoScaleMode.Dpi; // Auto-scales controls for high DPI laptop monitors!
             this.FormBorderStyle = FormBorderStyle.FixedDialog;

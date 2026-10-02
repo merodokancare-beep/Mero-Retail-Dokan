@@ -304,17 +304,19 @@ namespace MeroDokan
             btnReprintBill.Click += BtnReprintBill_Click;
             page.Controls.Add(btnReprintBill);
 
-            // Search Customer / Invoice Box
+            // Search Customer / Invoice Box (anchored Top | Right)
             Label lblSearch = new Label();
             lblSearch.Text = "Search Customer / Invoice:";
-            lblSearch.Location = new Point(715, 10);
+            lblSearch.Location = new Point(page.Width - 195, 10);
+            lblSearch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             lblSearch.AutoSize = true;
             Theme.StyleLabel(lblSearch, Theme.TextLight, Theme.BoldFont);
             page.Controls.Add(lblSearch);
 
             txtSalesSearch = new TextBox();
             txtSalesSearch.Size = new Size(175, 28);
-            txtSalesSearch.Location = new Point(715, 32);
+            txtSalesSearch.Location = new Point(page.Width - 195, 32);
+            txtSalesSearch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             txtSalesSearch.Font = Theme.MainFont;
             Theme.StyleTextBox(txtSalesSearch);
             txtSalesSearch.TextChanged += (s, e) => LoadDailySales();

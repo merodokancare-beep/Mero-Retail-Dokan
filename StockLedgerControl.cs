@@ -284,17 +284,19 @@ namespace MeroDokan
             btnItemwiseSearch.Click += (s, e) => LoadItemwiseSales();
             page.Controls.Add(btnItemwiseSearch);
 
-            // Search Box for Item Code / Name
+            // Search Box for Item Code / Name (anchored Top | Right)
             Label lblSearch = new Label();
             lblSearch.Text = "Search Product / Code:";
-            lblSearch.Location = new Point(540, 10);
+            lblSearch.Location = new Point(page.Width - 225, 10);
+            lblSearch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             lblSearch.AutoSize = true;
             Theme.StyleLabel(lblSearch, Theme.TextLight, Theme.BoldFont);
             page.Controls.Add(lblSearch);
 
             txtItemwiseSearch = new TextBox();
-            txtItemwiseSearch.Size = new Size(200, 28);
-            txtItemwiseSearch.Location = new Point(540, 32);
+            txtItemwiseSearch.Size = new Size(205, 28);
+            txtItemwiseSearch.Location = new Point(page.Width - 225, 32);
+            txtItemwiseSearch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             txtItemwiseSearch.Font = Theme.MainFont;
             Theme.StyleTextBox(txtItemwiseSearch);
             txtItemwiseSearch.TextChanged += (s, e) => LoadItemwiseSales();
